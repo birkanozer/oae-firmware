@@ -39,7 +39,8 @@ bool readDecCoordinate(Cursor &c, DecCoordinate &out)
 {
     int sign;
     unsigned dd, mm, ss;
-    if (!readMandatorySign(c, sign) || !c.digits(2, dd) || !c.matchIn("*:") || !c.digits(2, mm) || !c.match(':') || !c.digits(2, ss))
+    if (!readMandatorySign(c, sign) || !c.digits(2, dd) || !c.matchIn("*:") || !c.digits(2, mm) || !c.match(':')
+        || !c.digits(2, ss) || dd > 90 || mm > 59 || ss > 59)
     {
         return false;
     }
@@ -54,7 +55,7 @@ bool readDecCoordinate(Cursor &c, DecCoordinate &out)
 bool readRaCoordinate(Cursor &c, RaCoordinate &out)
 {
     unsigned hh, mm, ss;
-    if (!c.digits(2, hh) || !c.match(':') || !c.digits(2, mm) || !c.match(':') || !c.digits(2, ss))
+    if (!c.digits(2, hh) || !c.match(':') || !c.digits(2, mm) || !c.match(':') || !c.digits(2, ss) || hh > 23 || mm > 59 || ss > 59)
     {
         return false;
     }
@@ -69,7 +70,7 @@ bool readLatitude(Cursor &c, MeadeLatitude &out)
 {
     int sign;
     unsigned dd, mm;
-    if (!readMandatorySign(c, sign) || !c.digits(2, dd) || !c.matchIn("*:") || !c.digits(2, mm))
+    if (!readMandatorySign(c, sign) || !c.digits(2, dd) || !c.matchIn("*:") || !c.digits(2, mm) || dd > 90 || mm > 59)
     {
         return false;
     }
@@ -257,7 +258,7 @@ void handleMeadeSet(MeadeResponse &r, const char *s, IMeadeSetHandlers &h)
                         ok = true;
                     }
                 }
-                if (!ok)
+                if (!ok || hh > 23 || mm > 59 || ss > 59)
                 {
                     writeChar(r, '0');
                     return;
@@ -275,7 +276,7 @@ void handleMeadeSet(MeadeResponse &r, const char *s, IMeadeSetHandlers &h)
             // (legacy behaviour: any single char accepted).
             {
                 unsigned hh, mm;
-                if (!c.digits(2, hh) || c.peek() == '\0' || !c.match(c.peek()) || !c.digits(2, mm) || !c.atEnd())
+                if (!c.digits(2, hh) || c.peek() == '\0' || !c.match(c.peek()) || !c.digits(2, mm) || !c.atEnd() || hh > 23 || mm > 59)
                 {
                     writeChar(r, '0');
                     return;
@@ -339,7 +340,8 @@ void handleMeadeSet(MeadeResponse &r, const char *s, IMeadeSetHandlers &h)
             {
                 // L<HH>:<MM>:<SS>
                 unsigned hh, mm, ss;
-                if (!c.digits(2, hh) || !c.match(':') || !c.digits(2, mm) || !c.match(':') || !c.digits(2, ss))
+                if (!c.digits(2, hh) || !c.match(':') || !c.digits(2, mm) || !c.match(':') || !c.digits(2, ss) || hh > 23 || mm > 59
+                    || ss > 59)
                 {
                     writeChar(r, '0');
                     return;
@@ -353,7 +355,8 @@ void handleMeadeSet(MeadeResponse &r, const char *s, IMeadeSetHandlers &h)
             {
                 // C<MM>/<DD>/<YY>
                 unsigned mo, dd, yy;
-                if (!c.digits(2, mo) || !c.match('/') || !c.digits(2, dd) || !c.match('/') || !c.digits(2, yy))
+                if (!c.digits(2, mo) || !c.match('/') || !c.digits(2, dd) || !c.match('/') || !c.digits(2, yy) || mo < 1 || mo > 12
+                    || dd < 1 || dd > 31)
                 {
                     writeChar(r, '0');
                     return;

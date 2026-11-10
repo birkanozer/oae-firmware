@@ -41,7 +41,7 @@
 // Shorter intervals mean finer step timing. AVR is capped at 2 kHz: higher rates
 // there interfere with serial communications. The RP2040 has ample headroom.
 #ifndef STEPPER_CONTROL_INTERVAL_MS
-    #if defined(ARDUINO_ARCH_RP2040)
+    #if defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_ARCH_STM32)
         #define STEPPER_CONTROL_INTERVAL_MS 0.2f  // 5 kHz
     #else
         #define STEPPER_CONTROL_INTERVAL_MS 0.5f  // 2 kHz

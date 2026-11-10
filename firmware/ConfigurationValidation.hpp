@@ -17,7 +17,7 @@
 #endif
 
 // Platform
-#if defined(ESP32) || defined(__AVR_ATmega2560__) || defined(ARDUINO_ARCH_RP2040)
+#if defined(ESP32) || defined(__AVR_ATmega2560__) || defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_ARCH_STM32)
 // Valid platform
 #else
     #error Unsupported platform configuration. Use at own risk.
@@ -30,8 +30,8 @@
     && ((DISPLAY_TYPE == DISPLAY_TYPE_NONE) || (DISPLAY_TYPE == DISPLAY_TYPE_LCD_KEYPAD) || (DISPLAY_TYPE_LCD_KEYPAD_I2C_MCP23008)         \
         || (DISPLAY_TYPE_LCD_KEYPAD_I2C_MCP23017))
 // Valid display for ATmega
-#elif defined(ARDUINO_ARCH_RP2040) && (DISPLAY_TYPE == DISPLAY_TYPE_NONE)
-// Valid display for RP2040
+#elif (defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_ARCH_STM32)) && (DISPLAY_TYPE == DISPLAY_TYPE_NONE)
+// Valid display for RP2040 and STM32
 #else
     #error Unsupported display configuration. Use at own risk.
 #endif
@@ -83,7 +83,7 @@
     #else
         #error Defined an AZ driver, but no AZ stepper.
     #endif
-#elif defined(__AVR_ATmega2560__) || defined(ARDUINO_ARCH_RP2040)
+#elif defined(__AVR_ATmega2560__) || defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_ARCH_STM32)
     // Azimuth configuration
     #if (AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)
         #ifndef AZ_DRIVER_ADDRESS
@@ -104,7 +104,7 @@
     #else
         #error Defined an ALT driver, but no ALT stepper.
     #endif
-#elif defined(__AVR_ATmega2560__) || defined(ARDUINO_ARCH_RP2040)
+#elif defined(__AVR_ATmega2560__) || defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_ARCH_STM32)
     // Altitude configuration
     #if (ALT_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)
         #ifndef ALT_DRIVER_ADDRESS

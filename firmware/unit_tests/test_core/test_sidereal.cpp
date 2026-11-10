@@ -27,6 +27,13 @@ TEST(SiderealClockTest, DeltaJdLeapYear)
     EXPECT_EQ(1, feb1 - jan31);
 }
 
+TEST(SiderealClockTest, DeltaJdRejectsMonthOutOfRange)
+{
+    EXPECT_EQ(0, SiderealClock::calculateDeltaJd(2026, 0, 15));
+    EXPECT_EQ(0, SiderealClock::calculateDeltaJd(2026, 13, 15));
+    EXPECT_EQ(0, SiderealClock::calculateDeltaJd(2026, 255, 15));
+}
+
 TEST(SiderealClockTest, DeltaJdMonotonic)
 {
     int d1 = SiderealClock::calculateDeltaJd(2023, 1, 1);

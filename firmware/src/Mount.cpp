@@ -1169,6 +1169,8 @@ String Mount::getMountHardwareInfo()
     ret = F("Mega,");
 #elif defined(ARDUINO_ARCH_RP2040)
     ret = F("RP2040,");
+#elif defined(ARDUINO_ARCH_STM32)
+    ret = F("STM32F103,");
 #endif
 
     ret += F("NEMA|");

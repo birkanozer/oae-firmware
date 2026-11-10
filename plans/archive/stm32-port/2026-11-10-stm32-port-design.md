@@ -55,7 +55,8 @@ run once a 12/24 V supply is on.
    backup.
 2. `pio run -e robin_e3 -t upload`; USB serial at the configured baud answers `:GVP#` and
    `:GVN#`.
-3. `:XGMS#` (stepper info) reports TMC2209 version `0x21` for X and Y.
+3. Debug build (`DEBUG_LEVEL (DEBUG_INFO|DEBUG_EEPROM|DEBUG_STEPPERS)`, `UART_CONNECTION_TEST_TXRX 1`): boot log shows
+   `UART connection to RA driver successful.` and the same for DEC. (`:XGMS#` returns compile-time strings, not driver data.)
 4. `:MXr…`/manual slew moves RA and DEC both ways; `:Q#` stops.
 5. Change steps/deg with `:XSR…#`, power-cycle, `:XGR#` returns the new value.
 6. Same `:GVP#` over USART2 with a USB-UART adapter on PA2/PA3.

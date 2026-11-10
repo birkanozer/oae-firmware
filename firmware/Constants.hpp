@@ -27,6 +27,9 @@
 #define BOARD_RP2040_JACKW01  2101
 #define BOARD_RP2040_SKR_PICO 2201
 
+// STM32 based boards (3000-3999)
+#define BOARD_STM32_MKS_ROBIN_E3 3001
+
 /**
  * Supported keypad/display types. Use one of these values for DISPLAY_TYPE configuration matching your used display and keypad.
  * 

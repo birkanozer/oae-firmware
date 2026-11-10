@@ -10,14 +10,20 @@ STM32F103RCT6, Cortex-M3 72 MHz, 256 KB flash, 48 KB RAM (device id `0x10036414`
 SWD). Firmware at `0x08000000`, flashed with ST-Link V2 over SWD (J1, 2×3: SWDIO PA13, SWCLK
 PA14, RESET, 3.3 V, GND ⚠ pin order). Factory image backed up in `backup/`.
 
+Timers: stepper ISR on TIM6 at the lowest interrupt priority; TMC SoftwareSerial on TIM7
+(`TIMER_SERIAL`).
+
 ## Steppers (TMC2209, sense 0.11 Ω, single-wire UART per driver)
 
 | Socket | Axis (default) | STEP | DIR | EN (low = on) | UART |
 |---|---|---|---|---|---|
 | X | RA | PC0 | PB2 | PC13 | PC7 |
 | Y | DEC | PC2 | PB9 | PB12 | PD2 |
-| Z | free (ALT or bipolar AZ) | PC14 ⚠ | PC15 ⚠ | PB8 ⚠ | PC12 |
+| Z | ALT (default) | PC14 ⚠ | PC15 ⚠ | PB8 ⚠ | PC12 |
 | E | free (bipolar focus) | PB4 | PB3 | PB5 | PC11 |
+
+Firmware maps the Z socket to ALT by default. AZ has no step/dir pins yet: enabling AZ on this
+socket needs step/dir overrides.
 
 Motor connectors XH2.54-4P (Ender-3 order ⚠).
 
@@ -48,7 +54,12 @@ the coil centre, drop the red wire; plug the remaining four wires into a free TM
 
 Wire switch between signal and GND (internal pull-up). Treat inputs as 3.3 V.
 
+Pins are defined as upstream `*_DIAG_PIN`s and are not read yet; the homing slice sets them
+INPUT_PULLUP. PA11/PA12 are also the MCU's USB pins: unused, USB goes via the CH340.
+
 ## ESP32-S3 bridge (USART2)
+
+USART2 (`Serial2`) at 115200 baud.
 
 | Robin E3 | Header | ESP32-S3-DevKitC-1 |
 |---|---|---|
@@ -85,7 +96,7 @@ keeps SWD.**
 
 ## Other
 
-- USB (mini-B) → CH340 → USART1 PA9/PA10: LX200 for ASCOM / Stellarium desktop / debug.
+- USB (mini-B) → CH340 → USART1 PA9/PA10 (`Serial`, 19200): LX200 for ASCOM / Stellarium desktop / debug.
 - AT24C32 EEPROM on I²C PB6 SCL / PB7 SDA ⚠ (verify by I²C scan).
 - Power input 12–24 V. Unused: heaters PC8/PC9, fan PA8, thermistors PA0/PA1, runout PB10,
   SD on SPI2 (EXP2).

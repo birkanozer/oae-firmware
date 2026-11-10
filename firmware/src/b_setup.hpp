@@ -117,6 +117,12 @@ void updateConsoleText(int line, String newText)
 /////////////////////////////////
 void setup()
 {
+#if defined(ARDUINO_ARCH_STM32)
+    // JTAG off, SWD on, before anything else: PB3/PB4 (E stepper) and PA15 are JTAG pins at reset.
+    // STM32duino does not do this at boot. Keeps ST-Link (SWD) working.
+    __HAL_RCC_AFIO_CLK_ENABLE();
+    __HAL_AFIO_REMAP_SWJ_NOJTAG();
+#endif
 #if defined(OAT_DEBUG_BUILD)
     #if BOARD < 1000
     debug_init();  // Setup avr-stub
@@ -139,6 +145,9 @@ void setup()
     #endif
     #if DEBUG_LEVEL != 0 && DEBUG_SEPARATE_SERIAL == 1
     DEBUG_SERIAL_PORT.begin(DEBUG_SERIAL_BAUDRATE);
+    #endif
+    #if defined(ARDUINO_ARCH_STM32)
+    BRIDGE_SERIAL_PORT.begin(BRIDGE_SERIAL_BAUDRATE);
     #endif
     // RP2040 USB CDC: give a console up to 3 seconds to attach so the boot
     // log stays visible. Bounded, never infinite: a mount powered externally
@@ -364,6 +373,18 @@ void setup()
         #endif
     #endif
     updateConsoleText(focusLine, F("Init Focuser... OK"));
+#endif
+
+#if defined(ARDUINO_ARCH_STM32)
+    // Unused driver sockets: keep their EN lines HIGH (disabled) so a motor plugged in is not energized by a floating pin.
+    #if ALT_STEPPER_TYPE == STEPPER_TYPE_NONE
+    pinMode(ALT_EN_PIN, OUTPUT);
+    digitalWrite(ALT_EN_PIN, HIGH);
+    #endif
+    #if FOCUS_STEPPER_TYPE == STEPPER_TYPE_NONE
+    pinMode(FOCUS_EN_PIN, OUTPUT);
+    digitalWrite(FOCUS_EN_PIN, HIGH);
+    #endif
 #endif
 
 #if defined(RP2040_SHARED_EN_PIN)

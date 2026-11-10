@@ -10,7 +10,15 @@
 #if SUPPORT_SERIAL_CONTROL == 1
     #include "MeadeCommandProcessor.hpp"
 
+// One partial command per port. len == sizeof(data) marks an over-long command being discarded up to its '#'.
+struct SerialBuffer
+{
+    char    data[32];  // longest LX200 command is :SY (21 chars before #)
+    uint8_t len;
+};
+
 void processSerialData();
+void processSerialData(Stream &port, SerialBuffer &buf);
 
 ////////////////////////////////////////////////
 // The main loop when under serial control
@@ -19,7 +27,7 @@ void serialLoop()
     mount.loop();
     mount.displayStepperPositionThrottled();
 
-    #if defined(ESP32)
+    #if defined(ESP32) || defined(ARDUINO_ARCH_STM32)
     processSerialData();
     #endif
 
@@ -34,7 +42,7 @@ void serialLoop()
 
     //////////////////////////////////////////////////
     // Event that is triggered when the serial port receives data.
-    #ifndef ESP32
+    #if !defined(ESP32) && !defined(ARDUINO_ARCH_STM32)
 void serialEvent()
 {
     processSerialData();
@@ -106,30 +114,46 @@ void processSerialData()
     processTestState();
 }
     #else
-// ESP needs to call this in a loop :_(
-void processSerialData()
+// Handles the bytes waiting on one port. Each port owns its own buffer so two ports never share a partial command.
+// At most 64 bytes per call, so a flooded port cannot starve the other port or the rest of loop(); the rest waits in the UART FIFO/ring.
+void processSerialData(Stream &port, SerialBuffer &buf)
 {
-    static char buffer[20];
-    static unsigned int index = 0;
-    while (Serial.available() > 0)
+    for (uint8_t n = 0; n < 64 && port.available() > 0; n++)
     {
-        if (Serial.readBytes((buffer + index), 1) == 1)
+        const int ch = port.read();
+        if (ch < 0)
         {
-            if (buffer[index] == 0x06)
-            {
-                LOG(DEBUG_SERIAL, "[SERIAL]: Received: ACK request, replying P");
-                    // When not debugging, print the result to the serial port .
-                    // When debugging, only print the result to Serial if we're on seperate ports.
+            break;
+        }
+        // While discarding an over-long command (len == sizeof(data)) only '#' is looked at, ACK included.
+        if (ch == 0x06 && buf.len < sizeof(buf.data))
+        {
+            LOG(DEBUG_SERIAL, "[SERIAL]: Received: ACK request, replying P");
+                // When not debugging, print the result to the serial port .
+                // When debugging, only print the result to Serial if we're on seperate ports.
         #if (DEBUG_LEVEL == DEBUG_NONE) || (DEBUG_SEPARATE_SERIAL == 1)
-                Serial.print('P');
-        #endif
-                index = 0;
+            port.print('P');
+        #elif defined(ARDUINO_ARCH_STM32)
+            if (&port != &Serial)  // the bridge port never carries debug output
+            {
+                port.print('P');
             }
-            else if (buffer[index] == '#')
+        #endif
+            buf.len = 0;
+        }
+        else if (ch == '#')
+        {
+            if (buf.len >= sizeof(buf.data))
+            {
+                LOG(DEBUG_SERIAL, "[SERIAL]: Command buffer overflow! Ignoring received command.");
+                buf.len = 0;
+            }
+            else
             {
                 // Ignoring trailing hash
-                buffer[index]      = '\0';
-                const String inCmd = String(buffer);
+                buf.data[buf.len]  = '\0';
+                const String inCmd = String(buf.data);
+                buf.len            = 0;
                 LOG(DEBUG_SERIAL, "[SERIAL]: ReceivedCommand(%d chars): [%s]", inCmd.length(), inCmd.c_str());
 
                 const char *retVal = MeadeCommandProcessor::instance()->processCommand(inCmd);
@@ -139,25 +163,43 @@ void processSerialData()
                         // When not debugging, print the result to the serial port .
                         // When debugging, only print the result to Serial if we're on seperate ports.
         #if (DEBUG_LEVEL == DEBUG_NONE) || (DEBUG_SEPARATE_SERIAL == 1)
-                    Serial.print(retVal);
+                    port.print(retVal);
+        #elif defined(ARDUINO_ARCH_STM32)
+                    if (&port != &Serial)  // the bridge port never carries debug output
+                    {
+                        port.print(retVal);
+                    }
         #endif
                 }
-                // Wait for next command
-                index = 0;
             }
-            else if (buffer[index] >= ' ')
+        }
+        else if (ch >= ' ')
+        {
+            // len == sizeof(data) means "overflowed": drop everything up to the next '#', never store it.
+            if (buf.len < sizeof(buf.data))
             {
-                index++;
-                if (index >= sizeof(buffer))
+                buf.data[buf.len++] = (char) ch;
+                if (buf.len >= sizeof(buf.data))
                 {
                     LOG(DEBUG_SERIAL, "[SERIAL]: Command buffer overflow! Ignoring received data.");
-                    index = 0;
                 }
             }
         }
 
         mount.loop();
     }
+}
+
+// ESP needs to call this in a loop :_(
+void processSerialData()
+{
+    static SerialBuffer usbBuffer;
+    processSerialData(Serial, usbBuffer);
+        #if defined(ARDUINO_ARCH_STM32)
+    // Commands are handled one complete command at a time (processCommand returns a shared reply buffer).
+    static SerialBuffer bridgeBuffer;
+    processSerialData(BRIDGE_SERIAL_PORT, bridgeBuffer);
+        #endif
 }
 
     #endif

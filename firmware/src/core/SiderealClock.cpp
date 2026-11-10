@@ -24,6 +24,11 @@ double SiderealClock::calculateTheta(double deltaJ, double longitude, float time
 
 int SiderealClock::calculateDeltaJd(int year, int month, int day)
 {
+    // 0 is a sentinel for an invalid month; callers need no check as the Meade parser range-checks the date first.
+    if (month < 1 || month > 12)
+    {
+        return 0;
+    }
     const int daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
     // Calculating days without leapdays

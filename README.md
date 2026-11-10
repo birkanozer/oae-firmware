@@ -34,7 +34,8 @@ uv venv .venv --python 3.13
 uv pip install --python .venv\Scripts\python.exe platformio
 ```
 
-PlatformIO keeps its toolchains in `.pio-core/` (set in `firmware/platformio.ini`).
+PlatformIO keeps its toolchains in `.pio-core/` (set in `firmware/platformio.ini`). `.tools/` holds
+the portable MinGW GCC used by the native tests.
 
 ## Build and flash
 
@@ -44,6 +45,8 @@ cd firmware
 ..\.venv\Scripts\pio.exe run -e robin_e3 -t upload  # flash over ST-Link (board on 12/24 V)
 ..\.venv\Scripts\pio.exe test -e native             # host unit tests
 ```
+
+Full gate (native tests + `robin_e3` build), from the repo root: `bash tools/gate.sh`.
 
 ## License
 

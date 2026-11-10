@@ -119,6 +119,88 @@ uint8_t EEPROMStore::read(uint8_t location)
     return value;
 }
 
+#elif defined(ARDUINO_ARCH_STM32)
+
+// AT24C32 on I2C (PB7 SDA / PB6 SCL) when it answers, else STM32duino's flash EEPROM
+// emulation. Wire calls are bounded by the core's I2C timeout, so an absent chip cannot
+// hang boot: the probe just fails.
+#include <Wire.h>
+#include "core/storage/I2cEeprom.hpp"
+
+namespace {
+struct WireBus
+{
+    bool write(uint8_t dev, const uint8_t* data, size_t n)
+    {
+        Wire.beginTransmission(dev);
+        if (n > 0)
+            Wire.write(data, n);
+        return Wire.endTransmission() == 0;
+    }
+    bool read(uint8_t dev, uint8_t* out, size_t n)
+    {
+        if (Wire.requestFrom(dev, n) != n)
+            return false;
+        for (size_t i = 0; i < n; i++)
+            out[i] = Wire.read();
+        return true;
+    }
+    uint32_t millis() { return ::millis(); }
+};
+WireBus wireBus;
+core::I2cEeprom<WireBus> i2cEeprom(wireBus);
+bool useI2cEeprom = false;
+// Latched on a failed read or write: a store that cannot be read must never be written, and a half-written
+// marker must not be rewritten, or updateFlags() would overwrite the existing flags with blank-looking data.
+bool busFailed    = false;
+}  // namespace
+
+void EEPROMStore::initialize()
+{
+    Wire.setSDA(I2C_SDA_PIN);
+    Wire.setSCL(I2C_SCL_PIN);
+    Wire.begin();
+    useI2cEeprom = i2cEeprom.probe();
+    LOG(DEBUG_EEPROM, "[EEPROM]: STM32: Using %s", useI2cEeprom ? "AT24C32 (I2C)" : "flash emulation");
+
+    displayContents();
+}
+
+void EEPROMStore::update(uint8_t location, uint8_t value)
+{
+    if (!useI2cEeprom)
+    {
+        EEPROM.update(location, value);  // no flash page rewrite when unchanged
+        return;
+    }
+    if (busFailed)
+        return;
+    if (!i2cEeprom.update(location, value))
+    {
+        busFailed = true;
+        LOG(DEBUG_EEPROM, "[EEPROM]: STM32: AT24C32 write to %d failed, writes disabled", location);
+    }
+}
+
+void EEPROMStore::commit()
+{
+    // Nothing to do
+}
+
+uint8_t EEPROMStore::read(uint8_t location)
+{
+    if (!useI2cEeprom)
+        return EEPROM.read(location);
+    if (busFailed)
+        return 0xFF;
+    uint8_t value;
+    if (i2cEeprom.tryRead(location, value) || i2cEeprom.tryRead(location, value))
+        return value;
+    busFailed = true;
+    LOG(DEBUG_EEPROM, "[EEPROM]: STM32: AT24C32 read failed at %d, writes disabled", location);
+    return 0xFF;
+}
+
 #else
 
 // Initialize the EEPROM storage in a platform-independent abstraction

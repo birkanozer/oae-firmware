@@ -247,10 +247,17 @@ const char *MeadeCommandProcessor::onSiteName(uint8_t index)
 bool MeadeCommandProcessor::onStartGpsAcquisition(const char *timeoutPayload)
 {
 #if USE_GPS == 1
-    unsigned long timeoutLen = 2UL * 60UL * 1000UL;
+    const unsigned long defaultTimeout = 2UL * 60UL * 1000UL;
+    unsigned long timeoutLen           = defaultTimeout;
     if (timeoutPayload != nullptr && timeoutPayload[0] != '\0')
     {
-        timeoutLen = String(timeoutPayload).toInt();
+        // Negative or unparsable keeps the default; anything longer is clamped to it.
+        char *end         = nullptr;
+        const long parsed = strtol(timeoutPayload, &end, 10);
+        if (end != timeoutPayload && parsed >= 0)
+        {
+            timeoutLen = static_cast<unsigned long>(parsed) < defaultTimeout ? static_cast<unsigned long>(parsed) : defaultTimeout;
+        }
     }
     unsigned long timeoutTime = millis() + timeoutLen;
     int indicator             = 0;

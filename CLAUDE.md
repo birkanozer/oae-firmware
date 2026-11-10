@@ -17,7 +17,7 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
 - plans: plans/<slug>/
 - plans-after-ship: archive
 - ledger: plans/<slug>/progress.md
-- gate: cd firmware && ../.venv/Scripts/pio.exe test -e native && ../.venv/Scripts/pio.exe run -e robin_e3
+- gate: bash tools/gate.sh
 - version-files: none
 - release: github
 - notes: `firmware/Version.h` is upstream OAT's version; leave it, our product version is the git tag.
@@ -25,8 +25,9 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
 
 ## Commands
 
-- Tools live in this folder: `.venv/` (PlatformIO), `.pio-core/` (toolchains, OpenOCD). Call
-  `.venv/Scripts/pio.exe`; nothing global.
+- Tools live in this folder: `.venv/` (PlatformIO), `.pio-core/` (toolchains, OpenOCD), `.tools/`
+  (portable MinGW for native tests, put on PATH by `tools/gate.sh`). Call `.venv/Scripts/pio.exe`;
+  nothing global.
 - Firmware build/flash/test: see `README.md`. Flash goes to `0x08000000` over ST-Link (SWD).
 - Read-only chip probe: `.pio-core/packages/tool-openocd/bin/openocd.exe -s <pkg>/openocd/scripts
   -f interface/stlink.cfg -c "transport select swd" -f target/stm32f1x.cfg -c "init; reset halt; flash probe 0; resume; shutdown"`.

@@ -694,3 +694,155 @@ TEST(MeadeSet, empty_suffix_returns_zero)
     EXPECT_STREQ("0", dispatch("", h));
     EXPECT_EQ(nullptr, h.lastCall);
 }
+
+// ---- Range validation (trust boundary: parser is reachable over BLE) ---
+
+TEST(MeadeSet, SetDateRejectsMonth13)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("C13/15/26", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDateRejectsMonth0)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("C00/15/26", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDateRejectsDay0)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("C12/00/26", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDateRejectsDay32)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("C12/32/26", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDateAcceptsValid)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("1Updating Planetary Data#                              #", dispatch("C12/31/26", h));
+    EXPECT_STREQ("date", h.lastCall);
+}
+
+TEST(MeadeSet, SetRaRejectsHours24)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("r24:00:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDecRejectsDegrees91)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("d+91*00:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetLatitudeRejectsDegrees91)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("t-91*00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetLocalTimeRejectsHours24)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("L24:00:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetRaRejectsMinutes60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("r12:60:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetRaRejectsSeconds60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("r12:00:60", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDecRejectsMinutes60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("d+10*60:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetDecRejectsSeconds60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("d+10*00:60", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetLatitudeRejectsMinutes60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("t+10*60", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetLocalTimeRejectsMinutes60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("L12:60:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetLocalTimeRejectsSeconds60)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("L12:00:60", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, SetBoundaryValuesAccepted)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("1", dispatch("r23:59:59", h));
+    EXPECT_STREQ("1", dispatch("d+90*00:00", h));
+    EXPECT_STREQ("1", dispatch("d-90*00:00", h));
+    EXPECT_STREQ("1", dispatch("t+90*00", h));
+    EXPECT_STREQ("1", dispatch("t-90*00", h));
+    EXPECT_STREQ("1", dispatch("L23:59:59", h));
+}
+
+TEST(MeadeSet, SyncRejectsOutOfRange)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("Y+10*00:00.24:00:00", h));
+    EXPECT_STREQ("0", dispatch("Y+91*00:00.12:00:00", h));
+    EXPECT_STREQ("0", dispatch("Y+10*00:00.12:60:00", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, HourAngleRejectsOutOfRange)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("H24:00", h));
+    EXPECT_STREQ("0", dispatch("H12:60", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}
+
+TEST(MeadeSet, LocalSiderealTimeRejectsOutOfRange)
+{
+    FakeHandlers h;
+    EXPECT_STREQ("0", dispatch("HL240000", h));
+    EXPECT_STREQ("0", dispatch("HL2360", h));
+    EXPECT_STREQ("0", dispatch("HL236000", h));
+    EXPECT_STREQ("0", dispatch("HL230060", h));
+    EXPECT_EQ(nullptr, h.lastCall);
+}

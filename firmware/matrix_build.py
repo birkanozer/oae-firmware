@@ -29,9 +29,12 @@ RP2040_BOARDS = [
     "rp2040_jackw01",
     "rp2040_skr_pico",
 ]
+STM32_BOARDS = [
+    "robin_e3",
+]
 BOARDS = AVR_BOARDS + [
     "esp32",
-] + RP2040_BOARDS
+] + RP2040_BOARDS + STM32_BOARDS
 
 STEPPER_TYPES = [
     "STEPPER_TYPE_NONE",
@@ -227,6 +230,39 @@ BOARD_SUPPORT = {
         "AZ_DRIVER_TYPE": [
             "DRIVER_TYPE_NONE",
             "DRIVER_TYPE_TMC2209_UART"
+        ],
+        "ALT_DRIVER_TYPE": [
+            "DRIVER_TYPE_NONE",
+            "DRIVER_TYPE_TMC2209_UART"
+        ],
+        "FOCUS_DRIVER_TYPE": [
+            "DRIVER_TYPE_NONE"
+        ],
+        "FOCUS_STEPPER_TYPE": [
+            "STEPPER_TYPE_NONE"
+        ],
+    }),
+    "robin_e3": update_dict(BUILD_FLAGS, {
+        "USE_GPS": [0],
+        "USE_GYRO_LEVEL": [0],
+        # No display, and only RA/DEC/ALT sockets are wired for steppers on this board
+        "DISPLAY_TYPE": [
+            "DISPLAY_TYPE_NONE"
+        ],
+        "INFO_DISPLAY_TYPE": [
+            "INFO_DISPLAY_TYPE_NONE"
+        ],
+        "RA_DRIVER_TYPE": [
+            "DRIVER_TYPE_TMC2209_UART"
+        ],
+        "DEC_DRIVER_TYPE": [
+            "DRIVER_TYPE_TMC2209_UART"
+        ],
+        "AZ_DRIVER_TYPE": [
+            "DRIVER_TYPE_NONE"
+        ],
+        "AZ_STEPPER_TYPE": [
+            "STEPPER_TYPE_NONE"
         ],
         "ALT_DRIVER_TYPE": [
             "DRIVER_TYPE_NONE",

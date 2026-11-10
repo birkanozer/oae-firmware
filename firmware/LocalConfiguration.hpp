@@ -22,6 +22,10 @@
     #include "Configuration_local_rp2040_jackw01.hpp"
 #elif BOARD == BOARD_RP2040_SKR_PICO && __has_include("Configuration_local_rp2040_skr_pico.hpp")
     #include "Configuration_local_rp2040_skr_pico.hpp"
+#elif BOARD == BOARD_STM32_MKS_ROBIN_E3 && __has_include("Configuration_local_robin_e3.hpp")
+    #include "Configuration_local_robin_e3.hpp"
+#elif BOARD == BOARD_STM32_MKS_ROBIN_E3
+    #include "Configuration_local_examples/Configuration_local_robin_e3.hpp"
 #elif __has_include("Configuration_local.hpp")
     #include "Configuration_local.hpp"
 #endif

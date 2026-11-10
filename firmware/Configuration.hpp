@@ -296,6 +296,8 @@
     #include "boards/RP2040_JACKW01/pins_RP2040_JACKW01.hpp"
 #elif (BOARD == BOARD_RP2040_SKR_PICO)
     #include "boards/RP2040_SKR_PICO/pins_RP2040_SKR_PICO.hpp"
+#elif (BOARD == BOARD_STM32_MKS_ROBIN_E3)
+    #include "boards/STM32_MKS_ROBIN_E3/pins_MKS_ROBIN_E3.hpp"
 #endif
 
 #include "Configuration_adv.hpp"
