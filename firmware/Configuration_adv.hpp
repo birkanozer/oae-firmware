@@ -71,6 +71,37 @@
     #define DEC_STEPPER_ACCELERATION 6000
 #endif
 
+// MKS Robin E3: quiet TMC2209 on RA and DEC (stealthChop while idle, tracking and guiding)
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    #ifndef RA_UART_STEALTH_MODE
+        #define RA_UART_STEALTH_MODE 1
+    #endif
+    #ifndef DEC_UART_STEALTH_MODE
+        #define DEC_UART_STEALTH_MODE 1
+    #endif
+    #ifndef TMC_PWM_FREQ
+        #define TMC_PWM_FREQ 2  // stealthChop PWM: 0 = 11.7 kHz (audible), 1 = 35 kHz, 2 = 47 kHz, 3 = 58 kHz
+    #endif
+    #ifndef RA_HOLD_PERCENT
+        #define RA_HOLD_PERCENT 50  // % of run current at standstill
+    #endif
+    #ifndef DEC_HOLD_PERCENT
+        #define DEC_HOLD_PERCENT 50
+    #endif
+    #ifndef TMC_IHOLDDELAY
+        #define TMC_IHOLDDELAY 10  // current ramp-down steps (2^18 clocks each) from run to hold
+    #endif
+    #ifndef TMC_TPOWERDOWN
+        #define TMC_TPOWERDOWN 20  // x 2^18 clocks (~22 ms) of standstill before the hold current applies, ~0.44 s
+    #endif
+    #ifndef TMC_TOFF
+        #define TMC_TOFF 3  // with TBL 2 (blank_time(24)); TOFF 1 is the edge of the valid range and can whine
+    #endif
+    #ifndef TMC_TPWMTHRS
+        #define TMC_TPWMTHRS 1500  // TSTEP (1/256 microstep period, 12 MHz clocks) below this: spreadCycle, i.e. above ~8000 usteps/s
+    #endif
+#endif
+
 // MICROSTEPPING
 // The DRIVER_TYPE_TMC2209_UART driver can dynamically switch between microstep settings.
 // All other drivers are set by the MS pins, therefore values here must match pin strapping.
@@ -730,6 +761,23 @@
 // Onboard 128x64 LCD + knob UI (Ender-3 header, robin_e3 only)
 #ifndef USE_LCD_UI
     #define USE_LCD_UI 0
+#endif
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    #ifndef LCD_SPI_HALF_PERIOD_NS
+        #define LCD_SPI_HALF_PERIOD_NS 500  // ST7920 clock half period; raise it if the screen shows garbage
+    #endif
+    #ifndef LCD_SHOW_FRAME_MS
+        #define LCD_SHOW_FRAME_MS 0  // 1: draw the last LCD flush time in ms in the bottom-right corner
+    #endif
+    // Buzzer volume: tone() is a fixed 50 % duty, so loudness is tuned by pitch and length. The stock Ender 3
+    // LCD buzzer is passive and resonates around 2.7-4 kHz; ~6 kHz (or ~1 kHz) is well off resonance and much
+    // quieter. If your buzzer is ACTIVE (fixed pitch) the frequency has no effect and only the scale helps.
+    #ifndef BEEP_TONE_HZ
+        #define BEEP_TONE_HZ 6000
+    #endif
+    #ifndef BEEP_SCALE_PERCENT
+        #define BEEP_SCALE_PERCENT 35  // scales every beep duration and gap (100 = the old 20/60/400 ms)
+    #endif
 #endif
 #ifndef ENCODER_COUNTS_PER_DETENT
     #define ENCODER_COUNTS_PER_DETENT 4

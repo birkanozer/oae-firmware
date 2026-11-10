@@ -551,6 +551,15 @@ void Mount::configureRAdriver(uint16_t RA_SW_RX, uint16_t RA_SW_TX, float rsense
     _driverRA->I_scale_analog(false);
         #endif
     LOG(DEBUG_STEPPERS, "[MOUNT]: Requested RA motor rms_current: %d mA", rmscurrent);
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _driverRA->rms_current(rmscurrent, RA_HOLD_PERCENT / 100.0f);  // lower current only at true standstill
+    _driverRA->iholddelay(TMC_IHOLDDELAY);
+    _driverRA->TPOWERDOWN(TMC_TPOWERDOWN);
+    _driverRA->pwm_freq(TMC_PWM_FREQ);
+    _driverRA->toff(TMC_TOFF);  // toff 3..5 with tbl 2 (blank_time(24)); toff 1 whines
+    _driverRA->en_spreadCycle(RA_UART_STEALTH_MODE == 0);
+    _driverRA->TPWMTHRS(TMC_TPWMTHRS);  // stealthChop below this speed, spreadCycle above
+        #else
     _driverRA->rms_current(rmscurrent, 1.0f);  //holdMultiplier = 1 to set ihold = irun
         #if defined(ARDUINO_ARCH_RP2040)
     _driverRA->toff(4);  // toff>=3 required for StealthChop slow-decay phase
@@ -558,6 +567,7 @@ void Mount::configureRAdriver(uint16_t RA_SW_RX, uint16_t RA_SW_TX, float rsense
     _driverRA->toff(1);
         #endif
     _driverRA->en_spreadCycle(RA_UART_STEALTH_MODE == 0);
+        #endif
     _driverRA->blank_time(24);
     _driverRA->semin(0);                                                                    //disable CoolStep so that current is consistent
     _driverRA->microsteps(RA_TRACKING_MICROSTEPPING == 1 ? 0 : RA_TRACKING_MICROSTEPPING);  // System starts in tracking mode
@@ -645,6 +655,15 @@ void Mount::configureDECdriver(uint16_t DEC_SW_RX, uint16_t DEC_SW_TX, float rse
     _driverDEC->I_scale_analog(false);
         #endif
     LOG(DEBUG_STEPPERS, "[MOUNT]: Requested DEC motor rms_current: %d mA", rmscurrent);
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _driverDEC->rms_current(rmscurrent, DEC_HOLD_PERCENT / 100.0f);  // lower current only at true standstill
+    _driverDEC->iholddelay(TMC_IHOLDDELAY);
+    _driverDEC->TPOWERDOWN(TMC_TPOWERDOWN);
+    _driverDEC->pwm_freq(TMC_PWM_FREQ);
+    _driverDEC->toff(TMC_TOFF);  // toff 3..5 with tbl 2 (blank_time(24)); toff 1 whines
+    _driverDEC->en_spreadCycle(DEC_UART_STEALTH_MODE == 0);
+    _driverDEC->TPWMTHRS(TMC_TPWMTHRS);  // stealthChop below this speed, spreadCycle above
+        #else
     _driverDEC->rms_current(rmscurrent, 1.0f);  //holdMultiplier = 1 to set ihold = irun
         #if defined(ARDUINO_ARCH_RP2040)
     _driverDEC->toff(4);  // toff>=3 required for StealthChop slow-decay phase
@@ -652,6 +671,7 @@ void Mount::configureDECdriver(uint16_t DEC_SW_RX, uint16_t DEC_SW_TX, float rse
     _driverDEC->toff(1);
         #endif
     _driverDEC->en_spreadCycle(DEC_UART_STEALTH_MODE == 0);
+        #endif
     _driverDEC->blank_time(24);
     _driverDEC->microsteps(
         DEC_GUIDE_MICROSTEPPING == 1 ? 0 : DEC_GUIDE_MICROSTEPPING);  // If 1 then disable microstepping. Start with Guide microsteps

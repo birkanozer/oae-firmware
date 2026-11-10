@@ -68,6 +68,13 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   24 V). Supply sets the TMC2209 starting values and caps slew speed at 70 % on 12 V. Screen
   settings reset at boot until settings storage lands (slice 3).
 
+## Motor noise (TMC2209)
+
+RA and DEC run stealthChop at idle, tracking and guiding, and spreadCycle only when slewing fast. If a motor still hisses,
+set these as `#define`s in your local config: `TMC_PWM_FREQ` 3 (58 kHz) or 1 (35 kHz), `RA_HOLD_PERCENT` / `DEC_HOLD_PERCENT`
+lower (30) if the hiss is at standstill, `TMC_TOFF` 4 or 5, or `TMC_TPWMTHRS` raised (3000) to stay in stealthChop for faster
+moves. More hold means more torque and heat, less hold means quieter but a softer stop.
+
 ## License
 
 MIT, see [firmware/LICENSE](firmware/LICENSE). OAE mechanical design is CC BY-NC by

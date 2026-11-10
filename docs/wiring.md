@@ -116,7 +116,10 @@ USART2 (`Serial2`) at 115200 baud.
 The display's EXP3 connector plugs into the header labelled **"Ender-3 EXP1"** (third 10-pin
 header; Marlin `EXP3_*`, Klipper `CR_EXP3`) with the stock cable. PSU off, connector key matched.
 The ST7920 is 128Ã—64 monochrome, driven by U8g2 (BSD-2-Clause) with software SPI, so the LCD pins
-do not line up with SPI1.
+do not line up with SPI1. The pins are driven by direct register writes, and only the changed
+8-pixel rows of each frame are sent. `LCD_SPI_HALF_PERIOD_NS` (default 500, a 1 µs clock) sets the
+clock half period: raise it (for example 1000) if the screen shows garbage. `LCD_SHOW_FRAME_MS=1`
+draws the last flush time in ms in the bottom-right corner, for timing on the bench (default off).
 
 Pin map of the "Ender-3 EXP1" header (checked against Marlin `pins_MKS_ROBIN_E3_common.h`):
 

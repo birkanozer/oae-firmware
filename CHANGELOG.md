@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.1] - 2026-11-10
+
+### Changed
+
+- RA and DEC TMC2209 are quiet at standstill and while tracking on the Robin E3: stealthChop (spreadCycle only above `TMC_TPWMTHRS`), PWM at 47 kHz (`TMC_PWM_FREQ` 2), hold current 50 % of run (`RA_HOLD_PERCENT`, `DEC_HOLD_PERCENT`) after 0.44 s of standstill, and TOFF 3 with TBL 2 instead of TOFF 1.
+- LCD beeps are about a third as long and quieter: tone moved off the buzzer resonance to 6 kHz (`BEEP_TONE_HZ`) and all durations scaled by `BEEP_SCALE_PERCENT` (default 35: tick 7 ms, error 2x21 ms, long 140 ms).
+
+### Fixed
+
+- Inverted LCD text (selected rows, alert bars) drew as solid blocks; glyphs are now transparent over the XORed box.
+- The LCD redraws within about 30 ms of knob input, sends only the changed rows, and drives its pins with direct register writes (`LCD_SPI_HALF_PERIOD_NS`, optional `LCD_SHOW_FRAME_MS` timing readout).
+- Knob direction inverted by default for the stock Ender 3 LCD on the Robin E3 (`ENCODER_INVERT 1`).
+- TMC2209 UART reads never got a reply on the Robin E3, so every driver failed its connection test. With the board's 20 kΩ pull-down on PDN_UART, `SoftwareSerial::listen()` before the request glitched the line low ahead of the sync byte and the driver dropped the request. Now the line stays driven high for the whole request and the code listens only after it has gone out (`src/TmcHalfDuplex.cpp`).
+
 ## [v0.2.0] - 2026-11-10
 
 ### Added

@@ -12,6 +12,7 @@ class Knob
   public:
     void begin();
     void update(uint32_t nowMs, core::UiController &ui);  // turns, click, long press, queued beeps
+    bool takeInput();                                     // true once if a turn, click or long press happened since the last call
     void beep(core::UiAction::Kind kind);                 // Beep, BeepError or BeepLong
 
   private:
@@ -27,6 +28,7 @@ class Knob
     bool _rawDown             = false;
     bool _down                = false;
     bool _longFired           = false;
+    bool _input               = false;
     uint32_t _rawSinceMs      = 0;
     uint32_t _downAtMs        = 0;
     uint16_t _queue[16];  // tone durations in ms

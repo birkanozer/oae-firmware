@@ -16,7 +16,7 @@ class U8g2Canvas : public core::Canvas
   public:
     U8g2Canvas();
     void begin();
-    void flush();  // sendBuffer(): tens of ms in software SPI, call only when the frame changed
+    void flush();  // sends only the changed 8-pixel tile rows; the first call sends everything
 
     void clear() override;
     void text(core::Font f, int16_t x, int16_t y, const char *s, bool inverted) override;
@@ -26,6 +26,11 @@ class U8g2Canvas : public core::Canvas
 
   private:
     U8G2_ST7920_128X64_F_SW_SPI _u8g2;
+    uint8_t _last[1024];  // frame buffer as last sent
+    bool _lastValid = false;
+    #if LCD_SHOW_FRAME_MS
+    uint32_t _lastFlushUs = 0;
+    #endif
 };
 
 #endif

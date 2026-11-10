@@ -74,3 +74,6 @@
 
 // Ender-3 LCD and knob on the Ender-3 header.
 #define USE_LCD_UI 1
+
+// The stock Ender-3 LCD knob turns the wrong way without this.
+#define ENCODER_INVERT 1

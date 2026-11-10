@@ -12,11 +12,15 @@ constexpr uint32_t kDebounceMs   = 30;
 constexpr uint32_t kLongPressMs  = 700;
 constexpr uint32_t kFastGapMs    = 40;
 constexpr uint8_t kFastFactor    = 5;
-constexpr uint16_t kToneHz       = 2000;
-constexpr uint32_t kToneGapMs    = 40;
-constexpr uint16_t kTickMs       = 20;
-constexpr uint16_t kErrorMs      = 60;
-constexpr uint16_t kLongMs       = 400;
+constexpr uint16_t kToneHz       = BEEP_TONE_HZ;
+constexpr uint32_t scaleMs(uint32_t ms)
+{
+    return ms * BEEP_SCALE_PERCENT / 100 < 5 ? 5 : ms * BEEP_SCALE_PERCENT / 100;
+}
+constexpr uint32_t kToneGapMs    = scaleMs(40);
+constexpr uint16_t kTickMs       = scaleMs(20);
+constexpr uint16_t kErrorMs      = scaleMs(60);
+constexpr uint16_t kLongMs       = scaleMs(400);
 }  // namespace
 
 volatile int16_t Knob::_count = 0;
@@ -63,6 +67,7 @@ void Knob::update(uint32_t nowMs, core::UiController &ui)
         detents       = constrain(detents, -127, 127);
         // Stamped with the previous poll: if the loop was blocked, the turn is as old as the block and the UI drops it
         ui.onTurn(static_cast<int8_t>(detents), _lastPollMs);
+        _input = true;
     }
     _lastPollMs = nowMs;
 
@@ -83,15 +88,24 @@ void Knob::update(uint32_t nowMs, core::UiController &ui)
         else if (!_longFired)
         {
             ui.onClick(nowMs);
+            _input = true;
         }
     }
     if (_down && !_longFired && nowMs - _downAtMs >= kLongPressMs)
     {
         _longFired = true;
         ui.onLongPress(nowMs);
+        _input = true;
     }
 
     playNext(nowMs);
+}
+
+bool Knob::takeInput()
+{
+    const bool had = _input;
+    _input         = false;
+    return had;
 }
 
 void Knob::beep(core::UiAction::Kind kind)
