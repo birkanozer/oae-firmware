@@ -59,6 +59,30 @@ Wire switch between signal and GND (internal pull-up). Treat inputs as 3.3 V.
 
 3.3 V logic both sides, no level shifter.
 
+## Ender 3 V2 screen (DWIN T5UIC1) — USART3 + EXP2
+
+The screen's 10-pin connector, holes numbered on the stock cable plug (Klipper-dwin-ui,
+Marlin PR #24983, Creality V4 pins). **Sources disagree on pins 1/2 (NC vs 5 V/GND): check with
+a multimeter before powering.** TX/RX naming differs between sources too; if the screen stays
+blank, swap 3 and 4.
+
+| Screen pin | Signal | Robin E3 | Header |
+|---|---|---|---|
+| 3 | screen RX ← board TX | PB10 (USART3 TX) | J27 filament-runout header |
+| 4 | screen TX → board RX | PB11 (USART3 RX) | EXP2 pin 3 |
+| 5 | ENT (knob click) | PC10 | EXP2 pin 7 |
+| 6 | BEEP | PB13 | EXP2 pin 2 |
+| 7 | ENC B | PA15 | EXP2 pin 4 |
+| 8 | ENC A | PB0 | EXP2 pin 5 |
+| 9 | GND | GND | EXP2 pin 9 |
+| 10 | 5 V | 5 V | EXP1 pin 10 |
+
+115200 baud, 3.3 V signals (measured ~3.2 V). Encoder inputs use internal pull-ups. Needs an
+adapter cable (Dupont jumpers or a small adapter board); neither EXP header matches the screen
+pin-for-pin. Consequences: no filament-runout input (unused), no onboard SD card (EXP2 SPI
+pins PB13 shared; unused). **PA15 and PB3/PB4 are JTAG pins at reset: firmware disables JTAG and
+keeps SWD.**
+
 ## Other
 
 - USB (mini-B) → CH340 → USART1 PA9/PA10: LX200 for ASCOM / Stellarium desktop / debug.

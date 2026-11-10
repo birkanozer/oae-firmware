@@ -38,6 +38,8 @@ them), plate solving, autoguiding, a native iOS/Android app.
  GPS + time, plane fetch,                                           ├ ULN2003 A (EXP1) → AZ 28BYJ-48
  settings UI (EN/TR)                                                ├ ULN2003 B (EXP1) → focus 28BYJ-48
                                                                     ├ endstops X-/Y-/Z-/Z+ (microswitch)
+                                                                    ├ Ender 3 V2 screen (DWIN, USART3
+                                                                    │   PB10/PB11 + knob on EXP2)
                                                                     ├ AT24C32 I²C EEPROM (settings)
                                                                     └ USB (CH340, USART1) → LX200 / debug
 ```
@@ -77,6 +79,30 @@ Upgrade work (later slices):
 - **Microswitch homing** for RA, DEC (and AZ). OAT's hall-sensor routine finds both edges of a
   sensor zone and homes to the midpoint — a microswitch pressed by a printed cam of known width
   gives the same two edges, so the routine is reused, with debounce tuned for contacts.
+
+## 3a. Onboard screen (Ender 3 V2 DWIN)
+
+Lets the mount be set up and run with no phone, and is the first UI to exist (before the
+bridge). Creality Ender 3 V2 display: DWIN T5UIC1 serial LCD, 480×272, rotary knob + click,
+beeper. Frames `AA <cmd> <data> CC 33 C3 3C`, 115200 baud, RGB565, drawing commands (clear,
+text, rectangle, stock icon library, backlight). The driver is written **from the DWIN T5UIC1
+developer guide only** — Marlin's and other community DWIN code is GPL and is not copied.
+
+A **new graphical UI** for the knob, not OAT's 16×2 menus (OAT's `DISPLAY_TYPE` stays NONE; the
+screen is its own module calling the mount API):
+
+- **Status** (home screen): RA/Dec, Alt/Az, tracking on/off, LST, time, site, link state.
+- **Setup wizard** (first boot and from the menu): date/time, UTC offset, latitude/longitude
+  (knob entry; later prefilled when a phone sends them), home the axes.
+- **Jog**: pick axis, knob turns move it, click cycles speed; "Stop" always one click away.
+- **Point & track**: *Track here* — start sidereal tracking wherever the mount points (manual
+  aim, no coordinates needed); *GoTo RA/Dec* — enter coordinates, slew, then track; *Sync here*
+  — tell the mount the entered RA/Dec is where it points.
+- **Settings** (subset of §3 runtime config once it exists): motor currents, limits, Sun
+  avoidance off/on, screen brightness.
+
+The screen and the phone can be connected at once; the firmware stays the single authority, and
+the screen redraws from mount state, so either side's command shows up on both.
 
 ## 4. Mechanical limits and safety
 
@@ -157,9 +183,10 @@ Each slice is its own feature branch, plan, and release.
 |---|---|---|
 | 0 | Scaffold: repo, docs, OAT import, toolchain, native test gate | now |
 | 1 | `stm32-port`: board env, pins, timer ISR, TMC UART, EEPROM, LX200 on USB + USART2 | board on a 12/24 V PSU |
-| 2 | `runtime-config`: settings struct + `:XC` commands, ULN2003 driver type | slice 1 |
-| 3 | `homing`: microswitch homing, startup sequence, end-stop sanity stops | switches mounted |
-| 4 | `esp32-bridge`: BLE ↔ UART, hotspot STA + HTTPS/WSS | ESP32 wired |
-| 5 | `pwa`: connect (BLE + WSS), setup, jog, catalog GoTo, settings, EN/TR, offline | slice 4 |
-| 6 | `planes`: ADS-B tracking | slice 5 |
-| 7 | `stellarium`: LX200 TCP :4030 on the hotspot link | slice 4 |
+| 2 | `dwin-ui`: Ender 3 V2 screen driver + status, setup wizard, jog, point & track | screen wired (adapter cable) |
+| 3 | `runtime-config`: settings struct + `:XC` commands, ULN2003 driver type, screen settings page | slice 1 |
+| 4 | `homing`: microswitch homing, startup sequence (screen + LX200), end-stop sanity stops | switches mounted |
+| 5 | `esp32-bridge`: BLE ↔ UART, hotspot STA + HTTPS/WSS | ESP32 wired |
+| 6 | `pwa`: connect (BLE + WSS), setup, jog, catalog GoTo, settings, EN/TR, offline | slice 5 |
+| 7 | `planes`: ADS-B tracking | slice 6 |
+| 8 | `stellarium`: LX200 TCP :4030 on the hotspot link | slice 5 |

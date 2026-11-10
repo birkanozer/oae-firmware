@@ -30,6 +30,10 @@ WinLibs GCC 16.2 (`.tools/mingw64`).
   Z PC14/PC15/PB8/PC12; E PB4/PB3/PB5/PC11; endstops PA12, PA11, PC6, PB1; I²C PB6 SCL/PB7 SDA;
   USART2 PA2 TX/PA3 RX).
 - Timers: stepper ISR on `TIM6`; SoftwareSerial on `TIM7` (`-D TIMER_SERIAL=TIM7`).
+- JTAG off, SWD on, first thing in `setup()` on STM32 (`__HAL_RCC_AFIO_CLK_ENABLE();
+  __HAL_AFIO_REMAP_SWJ_NOJTAG();`): PB3/PB4 (E stepper) and PA15 (screen knob) are JTAG pins at
+  reset. Skip if the installed core already does it (check the variant), and say which.
+- Reserved for slice 2 (screen), do not assign: USART3 PB10/PB11, PC10, PB13, PA15, PB0.
 - TMC2209: `R_SENSE` 0.11, software serial 19200 baud, RX pin == TX pin per driver, address 0.
 - Serial: USB `Serial` (USART1) at `SERIAL_BAUDRATE` (upstream 19200); bridge `Serial2`
   (USART2) at `BRIDGE_SERIAL_BAUDRATE` = 115200.

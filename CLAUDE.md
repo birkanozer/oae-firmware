@@ -55,6 +55,9 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
 - 2026-11-10 AZ and focus 28BYJ-48: both drive methods, per axis — ULN2003 on EXP1 pins or
   bipolar-modded on a free TMC2209 socket.
 - 2026-11-10 Homing/limits with mechanical microswitches.
+- 2026-11-10 Ender 3 V2 screen on USART3 (PB10/PB11) + knob on EXP2, new graphical UI (not OAT's
+  16×2 menus). DWIN driver written from the DWIN T5UIC1 guide only; never copy Marlin or other
+  GPL DWIN code into this MIT repo.
 - 2026-11-10 Planes from free ADS-B (adsb.lol / airplanes.live), not Flightradar24.
 - 2026-11-10 All motor/gear/driver settings editable from the phone and stored on the board,
   stock OAE values as defaults.

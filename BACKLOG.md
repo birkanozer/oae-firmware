@@ -13,10 +13,14 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Later
 
-- Slice 2 `runtime-config` (settings struct, `:XC` commands, ULN2003 driver type).
-- Slice 3 `homing` (microswitch homing, startup sequence).
-- Slice 4 `esp32-bridge` (BLE + hotspot HTTPS/WSS).
-- Slice 5 `pwa`, slice 6 `planes`, slice 7 `stellarium`.
+- Slice 2 `dwin-ui` (Ender 3 V2 screen: driver from the DWIN T5UIC1 guide, status, setup wizard,
+  jog, Track here / GoTo RA/Dec / Sync). Needs the adapter cable (docs/wiring.md).
+- Slice 3 `runtime-config` (settings struct, `:XC` commands, ULN2003 driver type).
+- Slice 4 `homing` (microswitch homing, startup sequence).
+- Slice 5 `esp32-bridge` (BLE + hotspot HTTPS/WSS).
+- Slice 6 `pwa`, slice 7 `planes`, slice 8 `stellarium`.
+- Small built-in object list on the screen (Messier + bright stars in flash) for GoTo without
+  a phone.
 - Focuser 28BYJ-48 + ULN2003 (hardware arriving later).
 - Optional ALT motor on a free TMC2209 socket.
 
