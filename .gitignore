@@ -1,0 +1,28 @@
+# Local toolchains (installed into this folder)
+.venv/
+.pio-core/
+.tools/
+
+# PlatformIO build output
+.pio/
+firmware/.pio/
+bridge/.pio/
+
+# Factory flash image of the board: local only
+backup/
+
+# Bridge secrets (CA keys, WiFi credentials)
+bridge/certs/*.key
+.env
+.env.*
+
+# Bun / web
+node_modules/
+app/dist/
+
+# Editors / OS
+.vscode/.browse*
+.vscode/ipch
+Thumbs.db
+.DS_Store
+__pycache__/

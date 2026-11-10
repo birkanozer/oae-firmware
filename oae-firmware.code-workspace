@@ -1,0 +1,11 @@
+{
+  "folders": [
+    { "name": "root", "path": "." },
+    { "name": "firmware", "path": "firmware" },
+    { "name": "bridge", "path": "bridge" },
+    { "name": "app", "path": "app" }
+  ],
+  "settings": {
+    "files.exclude": { "**/.pio": true, ".pio-core": true, ".venv": true }
+  }
+}
