@@ -310,7 +310,11 @@ bool MeadeCommandProcessor::onSetLocalSiderealTime(meade::MeadeLocalTime lst)
 
 bool MeadeCommandProcessor::onSetHomePoint()
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _mount->setHomeHere();
+#else
     _mount->setHome(false);
+#endif
     return true;
 }
 
@@ -342,6 +346,9 @@ bool MeadeCommandProcessor::onSetSiteLongitude(meade::MeadeLongitude lon)
     Longitude value;
     value.addSeconds(siteSecondsFrom(lon.degrees, lon.minutes, lon.negative));
     _mount->setLongitude(value);
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _mount->applyPendingHomeReference();
+#endif
     return true;
 }
 
@@ -350,18 +357,27 @@ bool MeadeCommandProcessor::onSetUtcOffset(int hours)
     // Wire value is the local-time offset from UTC; the mount stores the
     // inverse so that "local + offset = UTC".
     _mount->setLocalUtcOffset(-hours);
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _mount->applyPendingHomeReference();
+#endif
     return true;
 }
 
 bool MeadeCommandProcessor::onSetLocalTime(meade::MeadeLocalTime t)
 {
     _mount->setLocalStartTime(DayTime(static_cast<int>(t.hours), static_cast<int>(t.minutes), static_cast<int>(t.seconds)));
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _mount->applyPendingHomeReference();
+#endif
     return true;
 }
 
 bool MeadeCommandProcessor::onSetLocalDate(meade::MeadeLocalDate d)
 {
     _mount->setLocalStartDate(static_cast<int>(d.year), static_cast<int>(d.month), static_cast<int>(d.day));
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _mount->applyPendingHomeReference();
+#endif
     /*
     From https://www.astro.louisville.edu/software/xmtel/archive/xmtel-indi-6.0/xmtel-6.0l/support/lx200/CommandSet.html :
     SC: Calendar: If the date is valid 2 <string>s are returned, each string is 31 bytes long.
@@ -378,7 +394,14 @@ bool MeadeCommandProcessor::onSetLocalDate(meade::MeadeLocalDate d)
 /////////////////////////////
 void MeadeCommandProcessor::onPark()
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    // No park on the OAE: go home (the markers) and leave tracking off, like the LCD's Go home.
+    _mount->stopSlewing(TRACKING);  // also when RA is already at home and no slew follows
+    _mount->startSlewingToHome();
+    _mount->suppressTrackingOnArrival();
+#else
     _mount->park();
+#endif
 }
 
 void MeadeCommandProcessor::onSlewToHome()
@@ -388,7 +411,9 @@ void MeadeCommandProcessor::onSlewToHome()
 
 void MeadeCommandProcessor::onUnpark()
 {
+#if BOARD != BOARD_STM32_MKS_ROBIN_E3  // nothing is parked on the OAE; the parser still replies "1"
     _mount->startSlewing(TRACKING);
+#endif
 }
 
 void MeadeCommandProcessor::onSetAzAltHome()

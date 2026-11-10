@@ -363,6 +363,14 @@ class Mount
     // Set the current stepper positions to be home.
     void setHome(bool clearZeroPos);
 
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    // Set home at the current position (UI and LX200). Works without date and time: the sky reference of home
+    // is then taken by applyPendingHomeReference() once both are set. Drops any Sync offset. Moves nothing.
+    bool setHomeHere();
+    void applyPendingHomeReference();
+    bool azDriverFailed() const;
+#endif
+
     // Set the DEC limit position to the given angle in degrees (saved as DEC steps).
     // If upper is true, sets the upper limit, else the lower limit.
     // If limitAngle is 0, limit is set to current position.
@@ -456,6 +464,11 @@ class Mount
     void setupEndSwitches();
 #endif
 
+    bool focusDriverFailed() const  // Focus UART test failed: focus moves are refused
+    {
+        return _focusDriverFailed;
+    }
+
 #if (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE) || (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
     // Support for moving the mount in azimuth and altitude (requires extra hardware)
     void moveBy(int direction, float arcMinutes);
@@ -472,7 +485,7 @@ class Mount
     long focusGetStepperPosition();
     void focusSetStepperPosition(long steps);
     void disableFocusMotor();
-    void enableFocusMotor();
+    bool enableFocusMotor();  // false: Focus driver failed its UART test, do not move
     void focusStop();
 #endif
 
@@ -715,6 +728,8 @@ class Mount
     bool _parkPending  = false;
     uint8_t _driverFault = 0;
     bool _azDriverFailed = false;  // AZ UART did not answer: enableAzMotor() keeps EN high
+    bool _homeReferencePending = false;  // Set home here ran before date and time: sky reference still to take
+    bool _focusDriverFailed = false;  // Focus UART did not answer: enableFocusMotor() keeps EN high
 };
 
 #endif

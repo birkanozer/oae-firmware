@@ -472,6 +472,10 @@ bool Mount::connectToDriver(const String &driverKind, uint16_t *rmsCurrent)
         {
             _azDriverFailed = true;
         }
+        if (driverKind == "FOC")
+        {
+            _focusDriverFailed = true;
+        }
     }
     if (rmsCurrent != nullptr)
     {
@@ -894,7 +898,12 @@ void Mount::configureFocusDriver(Stream *serial, float rsense, byte driveraddres
         #endif
     LOG(DEBUG_STEPPERS | DEBUG_FOCUS, "[FOCUS]: Requested Focus motor rms_current: %d mA", rmscurrent);
     _driverFocus->rms_current(rmscurrent, FOCUSER_MOTOR_HOLD_SETTING / 100.f);  //holdMultiplier = 1 to set ihold = irun
-        #if defined(ARDUINO_ARCH_RP2040)
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _driverFocus->iholddelay(TMC_IHOLDDELAY);
+    _driverFocus->TPOWERDOWN(TMC_TPOWERDOWN);
+    _driverFocus->pwm_freq(TMC_PWM_FREQ);
+    _driverFocus->toff(TMC_TOFF);  // toff 3..5 with tbl 2 (blank_time(24)); toff 1 whines
+        #elif defined(ARDUINO_ARCH_RP2040)
     _driverFocus->toff(4);  // toff>=3 required for StealthChop slow-decay phase
         #else
     _driverFocus->toff(1);
@@ -916,7 +925,12 @@ void Mount::configureFocusDriver(Stream *serial, float rsense, byte driveraddres
 
         #if FOCUSER_ALWAYS_ON == 1
     LOG(DEBUG_FOCUS, "[FOCUS]: Always on -> TMC2209U enabling driver pin.");
-    digitalWrite(FOCUS_EN_PIN, LOW);  // Logic LOW to enable driver
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    if (!_focusDriverFailed)  // a failed UART test keeps EN high
+        #endif
+    {
+        digitalWrite(FOCUS_EN_PIN, LOW);  // Logic LOW to enable driver
+    }
         #endif
 }
 
@@ -944,7 +958,12 @@ void Mount::configureFocusDriver(
         #endif
     LOG(DEBUG_STEPPERS | DEBUG_FOCUS, "[FOCUS]: Requested Focus motor rms_current: %d mA", rmscurrent);
     _driverFocus->rms_current(rmscurrent, FOCUSER_MOTOR_HOLD_SETTING / 100.f);  //holdMultiplier = 1 to set ihold = irun
-        #if defined(ARDUINO_ARCH_RP2040)
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _driverFocus->iholddelay(TMC_IHOLDDELAY);
+    _driverFocus->TPOWERDOWN(TMC_TPOWERDOWN);
+    _driverFocus->pwm_freq(TMC_PWM_FREQ);
+    _driverFocus->toff(TMC_TOFF);  // toff 3..5 with tbl 2 (blank_time(24)); toff 1 whines
+        #elif defined(ARDUINO_ARCH_RP2040)
     _driverFocus->toff(4);  // toff>=3 required for StealthChop slow-decay phase
         #else
     _driverFocus->toff(1);
@@ -965,7 +984,12 @@ void Mount::configureFocusDriver(
         #endif
         #if FOCUSER_ALWAYS_ON == 1
     LOG(DEBUG_FOCUS, "[FOCUS]: Always on -> TMC2209U enabling driver pin.");
-    digitalWrite(FOCUS_EN_PIN, LOW);  // Logic LOW to enable driver
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    if (!_focusDriverFailed)  // a failed UART test keeps EN high
+        #endif
+    {
+        digitalWrite(FOCUS_EN_PIN, LOW);  // Logic LOW to enable driver
+    }
         #endif
 }
     #endif
@@ -1494,6 +1518,9 @@ const Declination Mount::currentDEC() const
 // to be at the calculated positions (that they would be if we were slewing there).
 void Mount::syncPosition(DayTime ra, Declination dec)
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _homeReferencePending = false;  // located: the home reference is final
+#endif
     long solutions[6];
     _targetDEC = dec;
     _targetRA  = ra;
@@ -1562,6 +1589,9 @@ void Mount::syncPosition(DayTime ra, Declination dec)
 // there. Must call loop() frequently to actually move.
 void Mount::startSlewingToTarget()
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _homeReferencePending = false;  // located: the home reference is final
+#endif
     _suppressTrackingOnArrival = false;
     stopGuiding();
 
@@ -1619,6 +1649,9 @@ void Mount::startSlewingToTarget()
 // Takes any sync operations that have happened and tracking into account.
 void Mount::startSlewingToHome()
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _homeReferencePending = false;  // located: the home reference is final
+#endif
     _suppressTrackingOnArrival = false;
     stopGuiding();
 
@@ -2000,7 +2033,10 @@ void Mount::setSpeed(StepperAxis which, float speedDegsPerSec)
             LOG(DEBUG_STEPPERS | DEBUG_FOCUS,
                 "[FOCUS]: Mount:setSpeed(): Enabling motor, setting speed to %f. Continuous",
                 speedDegsPerSec);
-            enableFocusMotor();
+            if (!enableFocusMotor())
+            {
+                return;
+            }
             _stepperFocus->setMaxSpeed(speedDegsPerSec);
             _stepperFocus->moveTo(sign(speedDegsPerSec) * 300000);
             _focuserMode = FOCUS_TO_TARGET;
@@ -2085,7 +2121,7 @@ void Mount::startPark()
 
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3                                                                                                      \
     && (RA_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART || DEC_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART                                          \
-        || (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART))
+        || (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)                                                    || (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART))
 static uint8_t pwmOfsFor(float coilOhm, float rmsMilliAmp, uint8_t volts)
 {
     const float ofs = 374.0f * coilOhm * (rmsMilliAmp / 1000.0f) / volts;
@@ -2111,6 +2147,10 @@ void Mount::applySupplyVoltage(uint8_t volts)
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3 && AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
     _driverAZ->pwm_ofs(pwmOfsFor(AZ_COIL_RESISTANCE_OHM, (AZ_RMSCURRENT), _supplyVolts));
     _driverAZ->pwm_autoscale(true);
+#endif
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
+    _driverFocus->pwm_ofs(pwmOfsFor(FOCUS_COIL_RESISTANCE_OHM, (FOCUS_RMSCURRENT), _supplyVolts));
+    _driverFocus->pwm_autoscale(true);
 #endif
 }
 
@@ -2359,6 +2399,16 @@ void Mount::focusContinuousMove(FocuserDirection direction)
     setSpeed(FOCUS_STEPS, static_cast<int>(direction) * _maxFocusRateSpeed);
 }
 
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+// Base of a relative step move: a stepper still running (or decelerating) is aimed from where it is already headed,
+// so repeated Adjust moves add up instead of restarting from the current position and losing distance.
+template <class S>
+static long stepMoveBase(S *stepper)
+{
+    return stepper->isRunning() ? stepper->targetPosition() : stepper->currentPosition();
+}
+#endif
+
 /////////////////////////////////
 //
 // focusMoveBy
@@ -2366,9 +2416,16 @@ void Mount::focusContinuousMove(FocuserDirection direction)
 /////////////////////////////////
 void Mount::focusMoveBy(long steps)
 {
+    if (!enableFocusMotor())
+    {
+        return;  // Focus driver failed its UART test: refuse without changing position
+    }
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    long targetPosition = stepMoveBase(_stepperFocus) + steps;
+#else
     long targetPosition = _stepperFocus->currentPosition() + steps;
+#endif
     LOG(DEBUG_FOCUS, "[FOCUS]: focusMoveBy: move by %l steps to %l. Target Mode.", steps, targetPosition);
-    enableFocusMotor();
     _stepperFocus->moveTo(targetPosition);
     _focuserMode = FOCUS_TO_TARGET;
 }
@@ -2423,10 +2480,15 @@ void Mount::disableFocusMotor()
 // enableFocusMotor
 //
 /////////////////////////////////
-void Mount::enableFocusMotor()
+bool Mount::enableFocusMotor()
 {
+    if (_focusDriverFailed)
+    {
+        return false;  // UART did not answer at boot: never run on the board's VREF current
+    }
     LOG(DEBUG_FOCUS, "[FOCUS]: enableFocusMotor: enabling driver pin.");
     digitalWrite(FOCUS_EN_PIN, LOW);  // Logic LOW to enable driver
+    return true;
 }
 
 /////////////////////////////////
@@ -2700,6 +2762,9 @@ bool Mount::isFindingHome() const
 /////////////////////////////////
 void Mount::startSlewing(int direction)
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _homeReferencePending = false;  // located: the home reference is final
+#endif
     if (!isParking())
     {
         _suppressTrackingOnArrival = false;
@@ -3393,10 +3458,19 @@ void Mount::loop()
                 _driverRA->microsteps(RA_TRACKING_MICROSTEPPING == 1 ? 0 : RA_TRACKING_MICROSTEPPING);
             }
 #endif
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+            const bool stayIdle = _suppressTrackingOnArrival;  // STOP, jog from standstill, UI/:hP go home: no tracking, no catch-up
+#else
+            const bool stayIdle = false;
+#endif
             if (!isParking())
             {
                 LOG(DEBUG_STEPPERS, "[STEPPERS]: Loop: Not parking");
-                if (_compensateForTrackerOff)
+                if (stayIdle)
+                {
+                    _compensateForTrackerOff = false;  // idle: no catch-up move (it would block loop() and move RA past the markers)
+                }
+                else if (_compensateForTrackerOff)
                 {
                     now                             = millis();
                     unsigned long elapsed           = now - _trackerStoppedAt;
@@ -3487,8 +3561,15 @@ void Mount::loop()
                 }
                 else
                 {
-                    LOG(DEBUG_MOUNT | DEBUG_STEPPERS, "[MOUNT]: Loop:   Slewed home, not parking, so restart tracking.");
-                    startSlewing(TRACKING);
+                    if (stayIdle)
+                    {
+                        LOG(DEBUG_MOUNT | DEBUG_STEPPERS, "[MOUNT]: Loop:   Slewed home, staying idle.");
+                    }
+                    else
+                    {
+                        LOG(DEBUG_MOUNT | DEBUG_STEPPERS, "[MOUNT]: Loop:   Slewed home, not parking, so restart tracking.");
+                        startSlewing(TRACKING);
+                    }
                 }
                 _slewingToHome = false;
 // Reset DEC to guide microstepping so that guiding is always ready and no switch is neccessary on guide pulses.
@@ -3691,6 +3772,9 @@ void Mount::getDecLimitPositions(float &lowerLimit, float &upperLimit)
 /////////////////////////////////
 void Mount::setHome(bool clearZeroPos)
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _homeReferencePending = false;  // located: the home reference is final
+#endif
     LOG(DEBUG_MOUNT, "[MOUNT]: setHome() called. Stopping steppers");
     bool wasTracking = isSlewingTRK();
     stopSlewing(ALL_DIRECTIONS);
@@ -3723,6 +3807,40 @@ void Mount::setHome(bool clearZeroPos)
     //LOG(DEBUG_MOUNT_VERBOSE, "[MOUNT]: setHomePost: zeroPos is %s", _zeroPosRA.ToString());
     //LOG(DEBUG_MOUNT_VERBOSE, "[MOUNT]: setHomePost: targetRA is %s", targetRA().ToString());
 }
+
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+/////////////////////////////////
+//
+// setHomeHere / applyPendingHomeReference
+//
+/////////////////////////////////
+bool Mount::setHomeHere()
+{
+    // Zeroes the step counters (the mechanical home) and the sky reference; moves no motor.
+    setHome(false);
+    // Without a clock the LST is meaningless: take the sky reference when date and time arrive.
+    _homeReferencePending = !(isDateSet() && isTimeSet());
+    return true;
+}
+
+void Mount::applyPendingHomeReference()
+{
+    // Provisional until the mount is located: recomputed on every date, time, UTC offset or longitude change.
+    if (!_homeReferencePending || !isDateSet() || !isTimeSet())
+    {
+        return;
+    }
+    _zeroPosRA = calculateLst();
+    _zeroPosRA.addHours(6);  // same as setHome(): shift all coordinates by 90 degrees for the EQ mount
+    _zeroPosDEC = 0.0f;
+    _targetRA   = currentRA();
+}
+
+bool Mount::azDriverFailed() const
+{
+    return _azDriverFailed;
+}
+#endif
 
 /////////////////////////////////
 //
@@ -3979,6 +4097,9 @@ void Mount::moveSteppersTo(float targetRASteps, float targetDECSteps, StepperAxi
 /////////////////////////////////
 void Mount::moveStepperBy(StepperAxis direction, long steps)
 {
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _homeReferencePending = false;  // located: the home reference is final
+#endif
     LOG(DEBUG_STEPPERS, "[STEPPERS]: moveStepperBy: %l", steps);
 
     switch (direction)
@@ -3988,6 +4109,10 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
             break;
 
         case RA_STEPS:
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+            // Tracking before the move (or stopped by an earlier step move still running): resume on arrival. Idle: stay idle.
+            _suppressTrackingOnArrival = !(isSlewingTRK() || _compensateForTrackerOff);
+#endif
             if (steps != 0)
             {
                 // Only stop tracking if we're actually tracking and going to slew somewhere else, otherwise the
@@ -4008,23 +4133,37 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
             _driverRA->microsteps(RA_SLEW_MICROSTEPPING == 1 ? 0 : RA_SLEW_MICROSTEPPING);
 #endif
             setStatusFlag(STATUS_SLEWING | STATUS_SLEWING_TO_TARGET);
+#if BOARD != BOARD_STM32_MKS_ROBIN_E3
             _suppressTrackingOnArrival = false;
+#endif
             _stepperWasRunning         = true;
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+            moveSteppersTo(stepMoveBase(_stepperRA) + steps, 0, direction);
+#else
             moveSteppersTo(_stepperRA->currentPosition() + steps, 0, direction);
+#endif
             _totalRAMove = 1.0f * _stepperRA->distanceToGo();
             break;
 
         case DEC_STEPS:
             {
                 setStatusFlag(STATUS_SLEWING | STATUS_SLEWING_TO_TARGET);
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+                _suppressTrackingOnArrival = !(isSlewingTRK() || _compensateForTrackerOff);
+#else
                 _suppressTrackingOnArrival = false;
+#endif
 #if DEC_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
                 // Since normal state for DEC is guide microstepping, switch to slew microstepping here.
                 LOG(DEBUG_STEPPERS, "[STEPPERS]: moveStepperBy: Switching DEC driver to microsteps(%d)", DEC_SLEW_MICROSTEPPING);
                 _driverDEC->microsteps(DEC_SLEW_MICROSTEPPING == 1 ? 0 : DEC_SLEW_MICROSTEPPING);
 #endif
                 _stepperWasRunning = true;
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+                moveSteppersTo(0, stepMoveBase(_stepperDEC) + steps, direction);
+#else
                 moveSteppersTo(0, _stepperDEC->currentPosition() + steps, direction);
+#endif
                 _totalDECMove = 1.0f * _stepperDEC->distanceToGo();
             }
             break;
@@ -4046,7 +4185,11 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
                         "[STEPPERS]: moveStepperBy: AZ from %l to %l",
                         _stepperAZ->currentPosition(),
                         _stepperAZ->currentPosition() + steps);
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+                    _stepperAZ->moveTo(stepMoveBase(_stepperAZ) + steps);
+#else
                     _stepperAZ->moveTo(_stepperAZ->currentPosition() + steps);
+#endif
                 }
 #endif
             }

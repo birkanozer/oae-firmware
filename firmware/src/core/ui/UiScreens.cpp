@@ -1,4 +1,4 @@
-// UiController, part 2: GoTo, Sync, Setup, Jog, Home/Park and Settings screens (L3/L4).
+// UiController, part 2: Point (GO / SYNC), Adjust, Setup and Settings screens.
 // Safety (STOP while moving, fault page, saver, 500 ms click ignore) runs in UiController.cpp
 // before any of these handlers.
 
@@ -16,6 +16,8 @@ using namespace draw;
 namespace {
 
 constexpr float kBigJumpDeg = 5.0f;  // M5
+constexpr int32_t kStepSizes[5] = {1, 10, 100, 1000, 10000};
+constexpr uint8_t kJogFirst = 5;  // _stepSel 5..8 = JOG SLOW, CENTER, FIND, MAX (slew rates 1..4)
 
 int32_t wrapHalfDay(int32_t s)  // seconds -> (-43200, 43200]
 {
@@ -37,12 +39,10 @@ void UiController::openEditor(Edit e, int32_t value, bool lastGroup)
     _fastPath = false;  // fast-path callers set it again after opening
     switch (e)
     {
-        case Edit::GotoRa:
-        case Edit::SyncRa:
+        case Edit::PointRa:
             _editor.begin(FieldKind::RA, value);
             break;
-        case Edit::GotoDec:
-        case Edit::SyncDec:
+        case Edit::PointDec:
             _editor.begin(FieldKind::Dec, value);
             break;
         case Edit::Date:
@@ -79,20 +79,13 @@ void UiController::editorDone()
     const int32_t v = _editor.value();
     switch (_edit)
     {
-        case Edit::GotoRa:
+        case Edit::PointRa:
             _ra = v;
-            openEditor(Edit::GotoDec, _dec);
+            openEditor(Edit::PointDec, _dec);
             break;
-        case Edit::GotoDec:
+        case Edit::PointDec:
             _dec = v;
-            checkGoto();
-            break;
-        case Edit::SyncRa:
-            _ra = v;
-            openEditor(Edit::SyncDec, _dec);
-            break;
-        case Edit::SyncDec:
-            openSync(_ra, v);
+            openPointConfirm();
             break;
         case Edit::Date:
             if (_fastPath)  // S1a: then the time; both applied together
@@ -146,10 +139,9 @@ void UiController::editorBack()
         return;
     switch (_edit)
     {
-        case Edit::GotoDec:
-        case Edit::SyncDec:
+        case Edit::PointDec:
             _dec = _editor.value();
-            openEditor(_edit == Edit::GotoDec ? Edit::GotoRa : Edit::SyncRa, _ra, true);
+            openEditor(Edit::PointRa, _ra, true);
             break;
         case Edit::Time:
             if (_fastPath)
@@ -174,8 +166,7 @@ void UiController::editorBack()
         case Edit::MinAlt:
             _screen = Screen::Settings;
             break;
-        case Edit::GotoRa:
-        case Edit::SyncRa:
+        case Edit::PointRa:
             openMenu();
             break;
     }
@@ -218,44 +209,20 @@ void UiController::evalGoto()
     _sun = std::isfinite(sun) ? static_cast<int>(lroundf(sun)) : 0;
 }
 
-void UiController::checkGoto()
+// The Point confirm screen: GO selected, armed 600 ms later. The SYNC offset is worked out here, the
+// GO checks run again at the click (evalGoto), so a refusal only shows when GO is clicked.
+void UiController::openPointConfirm()
 {
     evalGoto();
+    _dRa = wrapHalfDay(_ra - _m.raSeconds);
+    _dDec = _dec - _m.decArcSec;
+    _bigJump = angularSeparationDeg(_m.raSeconds / 3600.0f, _m.decArcSec / 3600.0f, _ra / 3600.0f, _dec / 3600.0f) > kBigJumpDeg;
+    _pointSync = false;
     _screenFrom = _now;
-    _screen = _check == TargetCheck::Ok ? Screen::GotoConfirm : Screen::Refused;
-}
-
-void UiController::openSync(int32_t ra, int32_t dec)
-{
-    _ra = ra, _dec = dec;
-    _dRa = wrapHalfDay(ra - _m.raSeconds);
-    _dDec = dec - _m.decArcSec;
-    _bigJump = angularSeparationDeg(_m.raSeconds / 3600.0f, _m.decArcSec / 3600.0f, ra / 3600.0f, dec / 3600.0f) > kBigJumpDeg;
-    _screenFrom = _now;
-    _screen = Screen::SyncConfirm;
+    _screen = Screen::PointConfirm;
 }
 
 // ---- list screens ----
-
-TextId UiController::homeRow(uint8_t r) const
-{
-    // S5: when parked, Unpark is the only motion row.
-    static const TextId kIdle[] = {TextId::GoHome, TextId::SetHomeHere, TextId::Park, TextId::Back};
-    static const TextId kParked[] = {TextId::Unpark, TextId::SetHomeHere, TextId::Back};
-    if (_m.state == MountState::Parked)
-        return r < 3 ? kParked[r] : TextId::Back;
-    return r < 4 ? kIdle[r] : TextId::Back;
-}
-
-// Fault: every motion item locked. Unpark (like Track here) also needs date and time (M6).
-TextId UiController::homeLock(TextId row) const
-{
-    if (faultActive())
-        return faultText();
-    if (row == TextId::Unpark && !dateTimeSet())
-        return TextId::MsgDateTimeFirst;
-    return TextId::Count;
-}
 
 uint8_t UiController::items(Item *out) const
 {
@@ -270,11 +237,6 @@ uint8_t UiController::items(Item *out) const
     char v[24];
     switch (_screen)
     {
-        case Screen::JogMenu:
-            add(t(TextId::JogRa), nullptr, false);
-            add(t(TextId::JogDec), nullptr, false);
-            add(t(TextId::Speed), t(speedText()), false);
-            break;
         case Screen::Setup:
             if (_m.dateSet)
                 formatEdit(v, sizeof v, FieldKind::Date, _m.year * 10000 + _m.month * 100 + _m.day);
@@ -293,17 +255,21 @@ uint8_t UiController::items(Item *out) const
             formatEdit(v, sizeof v, FieldKind::Longitude, _m.lonArcSec);
             add(t(TextId::Longitude), v, false);
             break;
-        case Screen::HomePark:
-            for (uint8_t r = 0; homeRow(r) != TextId::Back; ++r)
-                add(t(homeRow(r)), nullptr, homeLock(homeRow(r)) != TextId::Count);
-            break;
         case Screen::Settings:
+            add(t(TextId::Setup), nullptr, false);  // Date, time, UTC offset, position live under Settings
             add(t(TextId::LangRow), t(TextId::LangName), false);
             snprintf(v, sizeof v, "%d%s", (int)_settings.get(SettingId::MinAlt), kDeg);  // S16: 0 not +0
             add(t(TextId::MinAlt), v, false);
             add(t(TextId::BeepRow), t(_settings.get(SettingId::Beep) ? TextId::On : TextId::Off), false);
             snprintf(v, sizeof v, "%d V", supplyVolts());
             add(t(TextId::SupplyRow), v, false);
+            break;
+        case Screen::AdjustOptions:
+            stepText(v, sizeof v);
+            add(t(TextId::StepRow), v, false);
+            add(t(TextId::SyncOnTarget), nullptr, optionLock(1) != TextId::Count);
+            add(t(TextId::SetHomeHere), nullptr, optionLock(2) != TextId::Count);
+            add(t(TextId::GoHome), nullptr, optionLock(3) != TextId::Count);
             break;
         default:
             break;
@@ -321,35 +287,94 @@ void UiController::clickList(uint32_t nowMs)
     if (it[_sel].lock)
     {
         push(UiAction::Kind::BeepError);
-        showMessage(_screen == Screen::HomePark ? homeLock(homeRow(_sel)) : faultText(), kMessageMs, nowMs);
+        showMessage(_screen == Screen::AdjustOptions ? optionLock(_sel) : faultText(), kMessageMs, nowMs);
         return;
     }
     clickTick();
-    if (_sel == n - 1)  // Back
-        return openMenu();
+    if (_sel == n - 1)  // Back: one level up, like a long press
+        return holdScreen();
     switch (_screen)
     {
-        case Screen::JogMenu:
-            if (_sel == 2)  // the firmware's four slew rates (M4)
-                push(UiAction::Kind::SetSlewRate, _m.slewRate >= 1 && _m.slewRate < 4 ? _m.slewRate + 1 : 1);
-            else
-            {
-                _jogDec = _sel == 1;
-                _screen = Screen::Jog;
-            }
-            break;
         case Screen::Setup:
             clickSetup(_sel);
-            break;
-        case Screen::HomePark:
-            clickHomePark(_sel);
             break;
         case Screen::Settings:
             clickSettings(_sel);
             break;
+        case Screen::AdjustOptions:
+            clickAdjustOptions(_sel);
+            break;
         default:
             break;
     }
+}
+
+// Adjust options: 0 Step size, 1 Sync on target, 2 Set home here, 3 Go home. The locks match the rows' dots.
+TextId UiController::optionLock(uint8_t row) const
+{
+    switch (row)
+    {
+        case 1:  // the last Point target, and the clock for the sky reference
+            return !dateTimeSet() ? TextId::MsgDateTimeFirst : (_haveTarget ? TextId::Count : TextId::MsgNoTarget);
+        case 2:  // the markers: only while nothing moves or tracks
+            return _m.state == MountState::Idle ? TextId::Count : TextId::MsgStopFirst;
+        case 3:  // from idle or tracking, no clock needed
+            return faultActive() ? faultText() : TextId::Count;
+        default:
+            return TextId::Count;
+    }
+}
+
+void UiController::clickAdjustOptions(uint8_t r)
+{
+    switch (r)
+    {
+        case 0:  // next size; JOG sizes only for RA and DEC
+            _stepSel = static_cast<uint8_t>((_stepSel + 1) % (_axis >= 2 ? kJogFirst : 9));
+            break;
+        case 1:
+            push(UiAction::Kind::Sync, _tgtRa, _tgtDec);
+            showTransient(TextId::HdrSynced, kMessageMs, _now);
+            _screen = Screen::Status;
+            break;
+        case 2:
+            _screen = Screen::SetHomeConfirm;
+            break;
+        default:
+            push(UiAction::Kind::GoHome);
+            _screen = Screen::Status;
+            break;
+    }
+}
+
+// Turn on Adjust: one step size per detent (detents of one tick merge into one move), or a jog.
+// Never moves an axis whose driver failed.
+void UiController::turnAdjust(int8_t detents, uint32_t nowMs)
+{
+    if (_stepSel >= kJogFirst)  // RA / DEC only (the click and the options keep AZ and Focus below)
+    {
+        if (!within(_now, nowMs, kJogStopMs))  // spun while the UI was blocked: dropped (M4)
+            return;
+        const uint8_t dir = _axis == 1 ? (detents > 0 ? 1 : 4) : (detents > 0 ? 2 : 8);  // N1 E2 S4 W8, right = E / N
+        if (dir != _jogDir)
+        {
+            jogStop();
+            push(UiAction::Kind::SetSlewRate, _stepSel - kJogFirst + 1);
+            push(UiAction::Kind::JogStart, dir);
+            _jogDir = dir;
+        }
+        _jogMs = nowMs;
+        return;
+    }
+    if (axisFaulted())
+    {
+        push(UiAction::Kind::BeepError);
+        showMessage(TextId::FaultDriver, kMessageMs, nowMs);
+        return;
+    }
+    push(UiAction::Kind::MoveSteps, detents * kStepSizes[_stepSel], _axis);
+    _stepLatch = true;  // a click in the same tick must STOP this move, not cycle the axis
+    _stepMs = nowMs;
 }
 
 void UiController::clickSetup(uint8_t r)
@@ -374,34 +399,15 @@ void UiController::clickSetup(uint8_t r)
     }
 }
 
-// M7: park and home are started here, then polled through the snapshot (PARKING / HOMING status).
-void UiController::clickHomePark(uint8_t r)
-{
-    switch (homeRow(r))
-    {
-        case TextId::GoHome:
-            push(UiAction::Kind::GoHome);
-            _screen = Screen::Status;
-            break;
-        case TextId::SetHomeHere:
-            _screen = Screen::SetHomeConfirm;
-            break;
-        case TextId::Park:
-            push(UiAction::Kind::Park);
-            _screen = Screen::Status;
-            break;
-        case TextId::Unpark:
-            push(UiAction::Kind::Unpark);
-            _screen = Screen::Status;
-            break;
-        default:
-            break;
-    }
-}
-
 void UiController::clickSettings(uint8_t r)
 {
-    const SettingId id = static_cast<SettingId>(r);
+    if (r == 0)  // Setup
+    {
+        _sel = 0;
+        _screen = Screen::Setup;
+        return;
+    }
+    const SettingId id = static_cast<SettingId>(r - 1);
     switch (id)
     {
         case SettingId::MinAlt:
@@ -421,21 +427,7 @@ void UiController::clickSettings(uint8_t r)
     }
 }
 
-// ---- jog (M4) ----
-
-void UiController::turnJog(int8_t detents, uint32_t nowMs)
-{
-    if (!within(_now, nowMs, kJogStopMs))  // spun while the UI was blocked: dropped
-        return;
-    const uint8_t dir = _jogDec ? (detents > 0 ? 1 : 4) : (detents > 0 ? 2 : 8);  // N1 E2 S4 W8, right = E / N
-    if (dir != _jogDir)
-    {
-        jogStop();
-        push(UiAction::Kind::JogStart, dir);
-        _jogDir = dir;
-    }
-    _jogMs = nowMs;
-}
+// ---- jog stop ----
 
 void UiController::jogStop()
 {
@@ -483,14 +475,12 @@ void UiController::renderEdit(Canvas &c) const
     TextId title = TextId::HdrSetupDate, last = TextId::FootSave;
     switch (_edit)
     {
-        case Edit::GotoRa:
-        case Edit::SyncRa:
-            title = _edit == Edit::GotoRa ? TextId::HdrGotoRa : TextId::HdrSyncRa;
+        case Edit::PointRa:
+            title = TextId::HdrPointRa;
             last = TextId::FootNextBack;
             break;
-        case Edit::GotoDec:
-        case Edit::SyncDec:
-            title = _edit == Edit::GotoDec ? TextId::HdrGotoDec : TextId::HdrSyncDec;
+        case Edit::PointDec:
+            title = TextId::HdrPointDec;
             sub = kDms, n = 4, last = TextId::FootCheck;
             break;
         case Edit::Date:
@@ -522,21 +512,21 @@ void UiController::renderList(Canvas &c) const
 {
     Item it[kItems];
     const uint8_t n = items(it);
-    const TextId title = _screen == Screen::JogMenu ? TextId::HdrJog
-                         : _screen == Screen::Setup ? TextId::HdrSetup
-                         : _screen == Screen::HomePark ? TextId::HdrHomePark
-                                                       : TextId::HdrSettings;
+    const TextId title = _screen == Screen::Setup ? TextId::HdrSetup : (_screen == Screen::AdjustOptions ? TextId::HdrAdjust : TextId::HdrSettings);
     list(c, title, it, n, _sel < n ? _sel : n - 1);
 }
 
+// Point confirm: the target, what GO or SYNC would do, and the GO | SYNC selector the knob turns.
+// The click bar appears once armed (600 ms).
 void UiController::renderConfirm(Canvas &c) const
 {
     char l[48], a[24], b[24];
-    const bool go = _screen == Screen::GotoConfirm;
-    header(c, t(go ? TextId::HdrGoto : TextId::HdrSync), t(TextId::HdrConfirm));
+    header(c, t(TextId::HdrPoint), t(TextId::HdrConfirm));
     hms(a, sizeof a, _ra);
     dms(b, sizeof b, _dec, true);
-    if (go)
+    const bool armed = !within(_now, _screenFrom, kArmMs);
+    int16_t top = 42;  // selector row
+    if (!_pointSync)
     {
         snprintf(l, sizeof l, "RA %s", a);
         c.text(Font::F6x10, 0, 13, l, false);
@@ -546,53 +536,104 @@ void UiController::renderConfirm(Canvas &c) const
         snprintf(l, sizeof l, "%s%c%02d%s Az%03d%s %s%d", t(TextId::ShortAlt), _alt < 0 ? '-' : '+', _alt < 0 ? -_alt : _alt, kDeg, _az, kDeg,
                  t(TextId::ShortSun), _sun);
         c.text(Font::F6x10, 0, 33, l, false);
-        if (!within(_now, _screenFrom, kArmMs))  // shown only once armed
+    }
+    else
+    {
+        // M5: the offset; above 5 degrees a "BIG JUMP" frame.
+        const int32_t ra = _dRa < 0 ? -_dRa : _dRa, de = _dDec < 0 ? -_dDec : _dDec;
+        char off[32];
+        snprintf(off, sizeof off, "dRA%c%d:%02d dDE%c%d%s", _dRa < 0 ? '-' : '+', (int)(ra / 3600), (int)(ra / 60 % 60), _dDec < 0 ? '-' : '+',
+                 (int)((de + 1800) / 3600), kDeg);
+        if (cols(off) + 1 + cols(t(TextId::ShortMove)) <= 21)
+            snprintf(l, sizeof l, "%s %s", t(TextId::ShortMove), off);
+        else
+            snprintf(l, sizeof l, "%s", off);
+        if (_bigJump)
         {
-            c.box(0, 42, 127, 52);
-            center(c, Font::F6x10, 43, t(TextId::ClickGo), true);
+            char both[48];
+            snprintf(both, sizeof both, "%s %s", a, b);
+            c.text(Font::F6x10, 0, 13, both, false);
+            c.text(Font::F6x10, 0, 22, l, false);
+            c.frame(0, 30, 127, 41);
+            center(c, Font::F6x10, 31, t(TextId::BigJump), false);
+            top = 43;
         }
+        else
+        {
+            char line[32];
+            snprintf(line, sizeof line, "RA %s", a);
+            c.text(Font::F6x10, 0, 13, line, false);
+            snprintf(line, sizeof line, "DE %s", b);
+            c.text(Font::F6x10, 0, 23, line, false);
+            c.text(Font::F6x10, 0, 33, l, false);
+        }
+    }
+    // Selector: two cells, the chosen one inverted.
+    for (int i = 0; i < 2; ++i)
+    {
+        const bool on = (i == 1) == _pointSync;
+        const int16_t x0 = i ? 65 : 0, x1 = i ? 127 : 62;
+        const char *label = t(i ? TextId::HdrSync : TextId::ChoiceGo);
+        if (on)
+            c.box(x0, top, x1, 52);
+        else
+            c.frame(x0, top, x1, 52);
+        c.text(Font::F6x10, static_cast<int16_t>(x0 + (x1 - x0 + 1 - 6 * cols(label)) / 2), 43, label, on);
+    }
+    if (armed && !moving() && !messageActive())
+        bar(c, 53, 63, 54, t(_pointSync ? TextId::ClickSync : TextId::ClickGo));
+    else
         footer(c, t(TextId::FootCancel));
-        return;
-    }
-    // M5: the offset; above 5 degrees a "BIG JUMP" frame.
-    const int32_t ra = _dRa < 0 ? -_dRa : _dRa, de = _dDec < 0 ? -_dDec : _dDec;
-    const bool armed = !within(_now, _screenFrom, kArmMs);  // like GO: shown only once armed
-    char off[32];
-    snprintf(off, sizeof off, "dRA%c%d:%02d dDE%c%d%s", _dRa < 0 ? '-' : '+', (int)(ra / 3600), (int)(ra / 60 % 60), _dDec < 0 ? '-' : '+',
-             (int)((de + 1800) / 3600), kDeg);
-    if (cols(off) + 1 + cols(t(TextId::ShortMove)) <= 21)
-        snprintf(l, sizeof l, "%s %s", t(TextId::ShortMove), off);
+}
+
+// "1000" or "JOG SLOW".
+void UiController::stepText(char *out, size_t n) const
+{
+    static const TextId kSpeeds[] = {TextId::SpeedSlow, TextId::SpeedCenter, TextId::SpeedFind, TextId::SpeedMax};
+    if (_stepSel >= kJogFirst)
+        snprintf(out, n, "%s %s", t(TextId::JogWord), t(kSpeeds[_stepSel - kJogFirst]));
     else
-        snprintf(l, sizeof l, "%s", off);
-    if (_bigJump)
+        snprintf(out, n, "%d", (int)kStepSizes[_stepSel]);
+}
+
+// Adjust: axis (header), the axis strip, position, step size with its degrees (RA, DEC, AZ; Focus has steps only).
+void UiController::renderAdjust(Canvas &c) const
+{
+    char l[48], v[24];
+    const TextId names[4] = {TextId::LabelRa, TextId::LabelDec, TextId::LabelAz, TextId::AxisFocus};
+    header(c, t(TextId::HdrAdjust), t(names[_axis]));
+    snprintf(l, sizeof l, "%s %ld", t(TextId::PosRow), (long)_m.axisPos[_axis]);
+    c.text(Font::F6x10, 0, 13, l, false);
+    stepText(v, sizeof v);
+    if (_stepSel < kJogFirst && _axis < 3 && _m.stepsPerDeg[_axis] > 0.0f)
     {
-        char both[48];
-        snprintf(both, sizeof both, "%s %s", a, b);
-        c.text(Font::F6x10, 0, 13, both, false);
-        c.text(Font::F6x10, 0, 22, l, false);
-        c.frame(0, 30, 127, 41);
-        center(c, Font::F6x10, 31, t(TextId::BigJump), false);
-        if (armed)
-        {
-            c.box(0, 43, 127, 52);
-            center(c, Font::F6x10, 43, t(TextId::ClickSync), true);
-        }
+        const float deg = kStepSizes[_stepSel] / _m.stepsPerDeg[_axis];
+        const long d100 = lroundf(deg * 100.0f);
+        if (d100 >= 1 && d100 < 100000)
+            snprintf(l, sizeof l, "%s %s = %ld.%02ld%s", t(TextId::StepRow), v, d100 / 100, d100 % 100, kDeg);
+        else if (d100 < 1)  // below 0.01 degrees: arc-seconds
+            snprintf(l, sizeof l, "%s %s = %ld.%ld\"", t(TextId::StepRow), v, lroundf(deg * 36000.0f) / 10, lroundf(deg * 36000.0f) % 10);
+        else
+            snprintf(l, sizeof l, "%s %s", t(TextId::StepRow), v);
     }
+    else if (_stepSel < kJogFirst)
+        snprintf(l, sizeof l, "%s %s", t(TextId::StepRow), v);
     else
+        snprintf(l, sizeof l, "%s", v);
+    c.text(Font::F6x10, 0, 23, l, false);
+    int16_t x = 2;  // the axes in use, the selected one inverted
+    for (uint8_t a = 0; a < 4; ++a)
     {
-        char line[32];
-        snprintf(line, sizeof line, "RA %s", a);
-        c.text(Font::F6x10, 0, 13, line, false);
-        snprintf(line, sizeof line, "DE %s", b);
-        c.text(Font::F6x10, 0, 23, line, false);
-        c.text(Font::F6x10, 0, 33, l, false);
-        if (armed)
-        {
-            c.box(0, 42, 127, 52);
-            center(c, Font::F6x10, 43, t(TextId::ClickSync), true);
-        }
+        if ((a == 2 && !_m.hasAz) || (a == 3 && !_m.hasFocus))
+            continue;
+        const char *name = t(names[a]);
+        const int16_t w = static_cast<int16_t>(6 * cols(name));
+        if (a == _axis)
+            c.box(static_cast<int16_t>(x - 1), 32, static_cast<int16_t>(x + w), 41);
+        c.text(Font::F6x10, x, 33, name, a == _axis);
+        x = static_cast<int16_t>(x + w + 12);
     }
-    footer(c, t(TextId::FootCancel));
+    footer(c, t(TextId::FootAdjust));
 }
 
 void UiController::renderRefused(Canvas &c) const
@@ -631,33 +672,6 @@ void UiController::renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const
     c.box(0, 36, 127, 46);
     center(c, Font::F6x10, 37, t(TextId::ClickYes), true);
     footer(c, t(TextId::FootCancel));
-}
-
-void UiController::renderJog(Canvas &c) const
-{
-    char l[32], a[24];
-    header(c, t(_jogDec ? TextId::HdrJogDec : TextId::HdrJogRa), t(speedText()));
-    if (_jogDec)
-    {
-        c.frame(0, 13, 61, 28);
-        c.text(Font::F7x13B, 21, 14, "RA", false);
-        c.box(66, 13, 127, 28);
-        c.text(Font::F7x13B, 86, 14, "DEC", true);
-    }
-    else
-    {
-        c.box(0, 13, 61, 28);
-        c.text(Font::F7x13B, 21, 14, "RA", true);
-        c.frame(66, 13, 127, 28);
-        c.text(Font::F7x13B, 86, 14, "DEC", false);
-    }
-    hms(a, sizeof a, _m.raSeconds);
-    snprintf(l, sizeof l, "RA %s", a);
-    c.text(Font::F6x10, 0, 32, l, false);
-    dms(a, sizeof a, _m.decArcSec, true);
-    snprintf(l, sizeof l, "DE %s", a);
-    c.text(Font::F6x10, 0, 42, l, false);
-    footer(c, t(_jogDec ? TextId::FootJogDec : TextId::FootJogRa));
 }
 
 }  // namespace core

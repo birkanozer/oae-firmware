@@ -757,6 +757,9 @@
 #ifndef AZ_COIL_RESISTANCE_OHM
     #define AZ_COIL_RESISTANCE_OHM 50.0f  // ohms, bipolar-modded 28BYJ-48: both halves in series, about 2 * R_half
 #endif
+#ifndef FOCUS_COIL_RESISTANCE_OHM
+    #define FOCUS_COIL_RESISTANCE_OHM 50.0f  // ohms, bipolar-modded 28BYJ-48 (same motor as AZ)
+#endif
 
 // Onboard 128x64 LCD + knob UI (Ender-3 header, robin_e3 only)
 #ifndef USE_LCD_UI

@@ -20,10 +20,11 @@ Timers: stepper ISR on TIM6 at the lowest interrupt priority; TMC SoftwareSerial
 | X | RA | PC0 | PB2 | PC13 | PC7 |
 | Y | DEC | PC2 | PB9 | PB12 | PD2 |
 | Z | AZ (example config) or ALT | PC14 ⚠ | PC15 ⚠ | PB8 ⚠ | PC12 |
-| E | free (bipolar focus) | PB4 | PB3 | PB5 | PC11 |
+| E | Focus (example config) | PB4 | PB3 | PB5 | PC11 |
 
 The Z socket carries AZ in the example config (`AZ_STEP_PIN` = `ALT_STEP_PIN` and so on) or ALT, never
-both: the pins file stops the build with `#error` if both are enabled. ALT and the focuser stay off.
+both: the pins file stops the build with `#error` if both are enabled. ALT stays off. The E socket
+carries the focuser in the example config.
 
 Motor connectors XH2.54-4P (Ender-3 order ⚠).
 
@@ -42,6 +43,16 @@ pins 6–8 (PA7, PC4, PC5) are available here, as ULN group B; 9/10 are GND and 
 The 5 V rail on EXP1 is the board's buck output (MP1584, 3 A); two 28BYJ-48 draw ~240 mA each
 at 5 V. 3.3 V logic drives the ULN2003 inputs fine. **PA15 and PB3/PB4 are JTAG pins at reset:
 firmware disables JTAG and keeps SWD.**
+
+## Focus motor: bipolar-modded 28BYJ-48 on the E socket (TMC2209, UART)
+
+Same motor mod, coil pairs (find them by continuity), current formula and safety rules as the AZ
+motor below, on the E socket (PB4 step, PB3 dir, PB5 EN, PC11 UART). Peak 150 mA = about 91 mA RMS
+(`FOCUS_MOTOR_CURRENT_RATING` is a peak value, RMS = rating x `FOCUS_OPERATING_CURRENT_SETTING` % / 1.414),
+hold 30 % (`FOCUSER_MOTOR_HOLD_SETTING`), released when idle (`FOCUSER_ALWAYS_ON 0`). EN stays high until
+the UART current is set. If the focus UART does not answer at boot, every focus move is refused
+(no motion, no position change). `UART_CONNECTION_TEST_TXRX 1` is mandatory (`#error` otherwise).
+2048 steps per turn, 16 microsteps, 400 full steps/s and 200 full steps/s^2.
 
 ## AZ motor: bipolar-modded 28BYJ-48 on the Z socket (TMC2209, UART)
 

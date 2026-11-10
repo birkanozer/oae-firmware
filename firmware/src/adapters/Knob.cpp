@@ -11,7 +11,6 @@ namespace
 constexpr uint32_t kDebounceMs   = 30;
 constexpr uint32_t kLongPressMs  = 700;
 constexpr uint32_t kFastGapMs    = 40;
-constexpr uint8_t kFastFactor    = 5;
 constexpr uint16_t kToneHz       = BEEP_TONE_HZ;
 constexpr uint32_t scaleMs(uint32_t ms)
 {
@@ -59,14 +58,12 @@ void Knob::update(uint32_t nowMs, core::UiController &ui)
     #if ENCODER_INVERT
         detents = -detents;
     #endif
-        if (_lastDetentMs != 0 && nowMs - _lastDetentMs < kFastGapMs)
-        {
-            detents *= kFastFactor;
-        }
-        _lastDetentMs = nowMs;
-        detents       = constrain(detents, -127, 127);
+        // Raw detents plus a "fast" flag: the core applies the acceleration (editors, menus), Adjust never does
+        const bool fast = _lastDetentMs != 0 && nowMs - _lastDetentMs < kFastGapMs;
+        _lastDetentMs   = nowMs;
+        detents         = constrain(detents, -127, 127);
         // Stamped with the previous poll: if the loop was blocked, the turn is as old as the block and the UI drops it
-        ui.onTurn(static_cast<int8_t>(detents), _lastPollMs);
+        ui.onTurn(static_cast<int8_t>(detents), _lastPollMs, fast);
         _input = true;
     }
     _lastPollMs = nowMs;

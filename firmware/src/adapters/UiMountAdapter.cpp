@@ -46,6 +46,9 @@ core::MountState UiMountAdapter::state()
     }
     if (_jogMask != 0 || _jogTail || (_mount.mountStatus() & STATUS_SLEWING_MANUAL))
         return MountState::Jogging;
+    // AZ and Focus step moves (Adjust page) run on their own steppers: count them as moving so a click is STOP.
+    if (_mount.isAxisRunning(AZIMUTH_STEPS) || _mount.isAxisRunning(FOCUS_STEPS))
+        return MountState::Jogging;
     if (_mount.isSlewingRAorDEC())
         return MountState::Slewing;
     if (_mount.isTracking())
@@ -93,6 +96,17 @@ void UiMountAdapter::fill(core::MountSnapshot &s)
     s.synced          = _synced;
     s.faultCode       = _mount.driverFault();
     s.supplyVoltage   = _mount.supplyVoltage();
+    s.hasAz           = AZ_STEPPER_TYPE != STEPPER_TYPE_NONE;
+    s.hasFocus        = FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE;
+    s.azFault         = _mount.azDriverFailed();
+    s.focusFault      = _mount.focusDriverFailed();
+    s.axisPos[0]      = _mount.getCurrentStepperPosition(RA_STEPS);
+    s.axisPos[1]      = _mount.getCurrentStepperPosition(DEC_STEPS);
+    s.axisPos[2]      = _mount.getCurrentStepperPosition(AZIMUTH_STEPS);
+    s.axisPos[3]      = _mount.getCurrentStepperPosition(FOCUS_STEPS);
+    s.stepsPerDeg[0]  = _mount.getStepsPerDegree(RA_STEPS);
+    s.stepsPerDeg[1]  = _mount.getStepsPerDegree(DEC_STEPS);
+    s.stepsPerDeg[2]  = s.hasAz ? _mount.getStepsPerDegree(AZIMUTH_STEPS) : 0.0f;
 }
 
 void UiMountAdapter::apply(const core::UiAction &a)
@@ -105,6 +119,8 @@ void UiMountAdapter::apply(const core::UiAction &a)
             _jogMask = 0;
             _jogTail = false;
             _mount.stopAll();  // stays stopped: the arrival block does not restart tracking
+            _mount.stopSlewing(AZIMUTH_STEPS);  // stopAll() only covers RA, DEC and tracking
+            _mount.stopSlewing(FOCUS_STEPS);
             break;
         case Kind::TrackOn:
             _goingHome = false;
@@ -152,14 +168,17 @@ void UiMountAdapter::apply(const core::UiAction &a)
             break;
         case Kind::SetDate:
             _mount.setLocalStartDate(a.a / 10000, a.a / 100 % 100, a.a % 100);
+            _mount.applyPendingHomeReference();
             _synced = false;  // the UI has already asked "Clears Sync. Sure?"
             break;
         case Kind::SetTime:
             _mount.setLocalStartTime(DayTime(a.a / 3600, a.a / 60 % 60, a.a % 60));
+            _mount.applyPendingHomeReference();
             _synced = false;
             break;
         case Kind::SetUtcOffset:
             _mount.setLocalUtcOffset(a.a);
+            _mount.applyPendingHomeReference();
             _synced = false;
             break;
         case Kind::SetLatitude:
@@ -174,20 +193,32 @@ void UiMountAdapter::apply(const core::UiAction &a)
             Longitude v;
             v.addSeconds(a.a);
             _mount.setLongitude(v);
+            _mount.applyPendingHomeReference();
             _synced = false;
             break;
         }
         case Kind::GoHome:
             _jogMask = 0;
             _jogTail = false;
+            _mount.stopSlewing(TRACKING);  // also when RA is already at home and no slew follows
             _mount.startSlewingToHome();
             _mount.suppressTrackingOnArrival();  // after a UI home the mount is idle, not tracking (startSlewingToHome clears the flag)
             _goingHome = true;
             break;
         case Kind::SetHome:  // the UI offers it only when idle: setHome() waits for the axes
-            _mount.setHome(false);
+            _mount.setHomeHere();
             _synced = false;
             break;
+        case Kind::MoveSteps:  // same call as the LX200 :MX command
+        {
+            static const StepperAxis axes[4] = {RA_STEPS, DEC_STEPS, AZIMUTH_STEPS, FOCUS_STEPS};
+            if (a.b >= 0 && a.b < 4)
+            {
+                _goingHome = false;
+                _mount.moveStepperBy(axes[a.b], a.a);
+            }
+            break;
+        }
         case Kind::Park:
             _goingHome = false;
             _jogMask = 0;

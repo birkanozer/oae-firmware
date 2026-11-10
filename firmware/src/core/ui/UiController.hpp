@@ -40,6 +40,12 @@ struct MountSnapshot
     bool dateSet, timeSet, rebooted, synced;
     uint8_t faultCode;  // 0 = none
     uint8_t supplyVoltage;  // 12 or 24 (0 = unknown, shown as the default)
+    // Adjust page. Axis order RA, DEC, AZ, Focus. axisPos: current step position (slew-mode steps).
+    // stepsPerDeg: RA slew, DEC slew, AZ (0 = unknown).
+    bool hasAz, hasFocus;  // that motor is configured
+    bool azFault, focusFault;  // its driver failed the UART test: never move it
+    int32_t axisPos[4];
+    float stepsPerDeg[3];
 };
 
 struct UiAction
@@ -66,13 +72,15 @@ struct UiAction
         Beep,
         BeepError,
         BeepLong,
-        SetSupplyVoltage  // a = volts (12 or 24)
+        SetSupplyVoltage,  // a = volts (12 or 24)
+        MoveSteps  // a = signed steps, b = axis (0 RA, 1 DEC, 2 AZ, 3 Focus)
     };
     Kind kind;
     // JogStart/JogStop: direction bits N1 E2 S4 W8; Goto/Sync: raSeconds; SetDate: yyyymmdd; SetTime: seconds of day;
-    // SetLatitude/SetLongitude: arc-seconds; SetUtcOffset: hours; SetSlewRate: 1..4; SetSupplyVoltage: volts.
+    // SetLatitude/SetLongitude: arc-seconds; SetUtcOffset: hours; SetSlewRate: 1..4; SetSupplyVoltage: volts;
+    // MoveSteps: steps.
     int32_t a;
-    int32_t b;  // Goto/Sync: decArcSec
+    int32_t b;  // Goto/Sync: decArcSec; MoveSteps: axis
 };
 
 // The 128x64 LCD user interface: screens, knob input, safety rules, actions for the mount.
@@ -83,7 +91,9 @@ class UiController
 {
   public:
     explicit UiController(Canvas &canvas);
-    void onTurn(int8_t detents, uint32_t nowMs);
+    // detents are raw; fast = the knob was turning quickly (menus and editors apply kFastFactor, Adjust never does).
+    void onTurn(int8_t detents, uint32_t nowMs, bool fast = false);
+    static constexpr int8_t kFastFactor = 5;
     void onClick(uint32_t nowMs);
     void onLongPress(uint32_t nowMs);
     bool tick(uint32_t nowMs, const MountSnapshot &m);  // returns true when the canvas changed
@@ -97,23 +107,19 @@ class UiController
         Menu,
         Rebooted,
         Editor,  // big-digit editor; _edit says which value
-        GotoConfirm,
-        SyncConfirm,
+        PointConfirm,  // GO or SYNC with the entered coordinates, the knob picks
         Refused,
-        Setup,
+        Setup,  // under Settings
         ClearsSync,
-        JogMenu,
-        Jog,
-        HomePark,
-        SetHomeConfirm,
-        Settings
+        Settings,
+        Adjust,  // step moves per detent on the selected axis
+        AdjustOptions,  // step size, sync on target, set home, go home
+        SetHomeConfirm
     };
     enum class Edit : uint8_t
     {
-        GotoRa,
-        GotoDec,
-        SyncRa,
-        SyncDec,
+        PointRa,
+        PointDec,
         Date,
         Time,
         Utc,
@@ -132,14 +138,9 @@ class UiController
     enum Row : uint8_t
     {
         RowMotion,
-        RowJog,
-        RowGoto,
-        RowSync,
-        RowSyncTarget,
-        RowSetup,
-        RowHomePark,
+        RowPoint,
+        RowAdjust,
         RowSettings,
-        RowBack,
         RowCount
     };
 
@@ -153,15 +154,16 @@ class UiController
             Turn
         } kind;
         int8_t detents;
+        int16_t extra;  // accelerated surplus on top of detents
         uint32_t ms;
     };
     static constexpr uint8_t kInputs = 8;
-    void queueInput(Input::Kind k, int8_t detents, uint32_t nowMs);
+    void queueInput(Input::Kind k, int8_t detents, uint32_t nowMs, int16_t extra = 0);
     void applyClick(uint32_t nowMs);
     void applyHold(uint32_t nowMs);
-    void applyTurn(int8_t detents, uint32_t nowMs);
+    void applyTurn(int8_t detents, int16_t extra, uint32_t nowMs);
     bool mountMoving() const;  // from the snapshot
-    bool moving() const { return mountMoving() || _jogDir != 0; }  // an own jog not reported yet counts
+    bool moving() const { return mountMoving() || _jogDir != 0 || _stepLatch; }  // an own jog or step move not reported yet counts
     void stop(uint32_t nowMs);
     void clickScreen(uint32_t nowMs);
     void holdScreen();
@@ -182,16 +184,15 @@ class UiController
     }
     void commit(Screen ret);  // applies the pending setup actions; S5 "Clears Sync. Sure?" first after a Sync
     void evalGoto();  // _check, _alt, _az, _sun from the current snapshot
-    void checkGoto();
-    TextId homeLock(TextId row) const;  // Count = unlocked, else message id
-    void openSync(int32_t ra, int32_t dec);
+    void openPointConfirm();  // after the Dec editor: GO selected, armed 600 ms later
     void clickList(uint32_t nowMs);
     uint8_t items(Item *out) const;  // rows of the current list screen
     void clickSetup(uint8_t row);
-    void clickHomePark(uint8_t row);
-    TextId homeRow(uint8_t row) const;
     void clickSettings(uint8_t row);
-    void turnJog(int8_t detents, uint32_t nowMs);
+    void clickAdjustOptions(uint8_t row);
+    void turnAdjust(int8_t detents, uint32_t nowMs);
+    TextId optionLock(uint8_t row) const;  // Adjust options: Count = unlocked, else message id
+    bool axisFaulted() const { return (_axis == 2 && _m.azFault) || (_axis == 3 && _m.focusFault); }
     void jogStop();
     TextId speedText() const;
     int supplyVolts() const { return _m.supplyVoltage ? _m.supplyVoltage : (_settings.get(SettingId::Supply) ? 24 : 12); }
@@ -199,7 +200,7 @@ class UiController
     void formatEdit(char *out, size_t n, FieldKind k, int32_t v) const;
     // state helpers
     void push(UiAction::Kind k, int32_t a = 0, int32_t b = 0);
-    void showTransient(TextId id, uint32_t ms, uint32_t nowMs);  // SYNCED / HOME SET plug in here (L3/L4)
+    void showTransient(TextId id, uint32_t ms, uint32_t nowMs);  // SYNCED / HOME SET
     void showMessage(TextId id, uint32_t ms, uint32_t nowMs);
     bool messageActive() const { return _message != TextId::Count && within(_now, _messageFrom, _messageMs); }
     // Signed difference: an input stamped just before the tick that set `from` still counts as within.
@@ -228,8 +229,9 @@ class UiController
     void renderList(Canvas &c) const;
     void renderConfirm(Canvas &c) const;
     void renderRefused(Canvas &c) const;
+    void renderAdjust(Canvas &c) const;
+    void stepText(char *out, size_t n) const;  // "1000" or "JOG SLOW"
     void renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const;
-    void renderJog(Canvas &c) const;
     void header(Canvas &c, const char *left, const char *right, bool inverted = false) const;
     void footer(Canvas &c, const char *hint) const;
     void bar(Canvas &c, int16_t y0, int16_t y1, int16_t ty, const char *s) const;
@@ -247,7 +249,8 @@ class UiController
     FieldEditor _editor;
     Edit _edit = Edit::Date;
     bool _fastPath = false;  // status alert: Date then Time, applied together
-    int32_t _ra = 0, _dec = 0;  // GoTo / Sync values being edited or confirmed
+    int32_t _ra = 0, _dec = 0;  // Point values being edited or confirmed
+    bool _pointSync = false;  // PointConfirm: false = GO, true = SYNC
     bool _haveTarget = false;  // last GoTo target latched (the snapshot only reports it while slewing)
     int32_t _tgtRa = 0, _tgtDec = 0;
     int32_t _pendingDate = 0;
@@ -259,9 +262,12 @@ class UiController
     UiAction _pending[2];
     uint8_t _pendingN = 0;
     Screen _ret = Screen::Status;  // after ClearsSync
-    bool _jogDec = false;
+    uint8_t _axis = 0;  // Adjust: 0 RA, 1 DEC, 2 AZ, 3 Focus
+    uint8_t _stepSel = 2;  // Adjust: 0..4 = 1, 10, 100, 1000, 10000 steps; 5..8 = JOG SLOW..MAX (RA/DEC only)
     uint8_t _jogDir = 0;  // own jog in progress (0 = none)
     uint32_t _jogMs = 0;
+    bool _stepLatch = false;  // own MoveSteps emitted, snapshot not moving yet (cleared on motion or after kStepLatchMs)
+    uint32_t _stepMs = 0;
     UiSettings _settings;
     int32_t _savedDate;
 

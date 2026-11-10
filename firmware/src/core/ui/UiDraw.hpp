@@ -12,6 +12,7 @@ namespace draw {
 
 constexpr char kDeg[] = "\xC2\xB0";
 constexpr uint32_t kMessageMs = 2000;  // footer message after a locked row
+constexpr uint32_t kStepLatchMs = 300;  // an own step move counts as moving this long until the snapshot shows it
 constexpr uint32_t kJogStopMs = 300;   // jog stops 300 ms after the last detent; older turns are dropped (M4)
 constexpr uint32_t kArmMs = 600;       // GoTo confirm: GO armed 600 ms after the screen appeared (S4)
 

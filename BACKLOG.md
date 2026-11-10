@@ -61,11 +61,13 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Bugs
 
+- AZ driver has no TMC quiet settings (stealthChop/PWM_FREQ/TOFF) like RA/DEC/Focus; may whine when it moves. Check on the bench.
+- Step move during a GoTo started from idle makes the GoTo end idle (accepted in point-adjust).
+
 - `robin_e3` core runs at 64 MHz (measured over SWD) while `F_CPU` says 72 MHz, likely HSI instead of the 8 MHz HSE crystal. LCD DWT delays use `F_CPU` (12.5 % long, harmless); switch them to `SystemCoreClock` and consider running the PLL from HSE at 72 MHz.
 
 ## Debate
 
-- LCD backlight brightness: the stock Ender 3 LCD backlight is hard-wired to 5 V. Brightness needs one wire: cut the backlight LED cathode (K) trace and run it to FAN − (PA8, TIM1 PWM). Waiting on the user's go-ahead and a photo of the LCD back.
 - Slew torque with `TMC_TPWMTHRS` 1500 (spreadCycle above ~31 full steps/s) not checked on the bench.
 
 - USB transmit dead on our board (2026-11-10): USART1 configured and receiving (PC → board works), but

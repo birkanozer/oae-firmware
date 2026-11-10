@@ -57,10 +57,15 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   back. In an editor, hold goes to the previous field (on the first field it cancels).
 - **Any click or hold stops motion.** While the mount slews, jogs, parks or homes, a click or hold
   on any screen issues STOP, which halts every motor including tracking. The footer shows
-  `click: STOP`. Turning the knob does nothing during motion, except on the Jog screen.
-- **Jog:** turn to move. The slew stops 0.3 s after the knob stops. Click toggles RA and DEC; hold
-  returns to the submenu. Speed cycles SLOW / CENTER / FIND / MAX.
-- **GoTo, Sync and Track here stay locked** until both date and time are set since boot. The status
+  `click: STOP`. Turning the knob does nothing during motion, except on the Adjust screen.
+- **Point:** RA, then Dec, then a confirm screen; turn to pick GO or SYNC, click to run it.
+- **Adjust:** turn to move the selected axis (RA, DEC, and AZ or Focus when fitted) by one step
+  size per detent; click picks the next axis; hold opens the options: step size (1 to 10 000
+  steps, or a continuous jog at SLOW / CENTER / FIND / MAX for RA and DEC), Sync on target, Set home
+  here and Go home. The screen shows the axis position and what a step is in degrees. Use it to
+  line the mount up with the OAE markers, then run **Set home here** (only while idle; it works
+  before date and time are set). Sync on target uses the last Point coordinates.
+- **Point and Track here stay locked** until both date and time are set since boot. The status
   screen names what is missing; click the warning to go straight to Date, then Time.
 - **GoTo refuses** targets below the minimum altitude or within 15° of the Sun. The refused screen
   returns to the editor with the values kept.

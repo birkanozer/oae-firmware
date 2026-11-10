@@ -140,13 +140,14 @@ void UiController::stop(uint32_t nowMs)
     push(UiAction::Kind::BeepLong);
     showTransient(TextId::HdrStopped, kStoppedMs, nowMs);
     _jogDir = 0;
+    _stepLatch = false;
     _saver = false;
     _screen = Screen::Status;
 }
 
 // Inputs are only queued; tick() applies them after it has seen the new snapshot, so a click
 // that raced an LX200 GoTo still sees the motion (STOP) and the armed 500 ms window.
-void UiController::queueInput(Input::Kind k, int8_t detents, uint32_t nowMs)
+void UiController::queueInput(Input::Kind k, int8_t detents, uint32_t nowMs, int16_t extra)
 {
     if (!_started)  // nothing on screen yet
         return;
@@ -155,6 +156,7 @@ void UiController::queueInput(Input::Kind k, int8_t detents, uint32_t nowMs)
         Input &last = _inputs[_inCount - 1];  // merge consecutive turns, keep the newest stamp
         const int sum = last.detents + detents;
         last.detents = static_cast<int8_t>(sum > 127 ? 127 : (sum < -127 ? -127 : sum));
+        last.extra = static_cast<int16_t>(last.extra + extra);
         last.ms = nowMs;
         return;
     }
@@ -164,7 +166,7 @@ void UiController::queueInput(Input::Kind k, int8_t detents, uint32_t nowMs)
             _inputs[i - 1] = _inputs[i];
         --_inCount;
     }
-    _inputs[_inCount++] = {k, detents, nowMs};
+    _inputs[_inCount++] = {k, detents, extra, nowMs};
 }
 
 void UiController::onClick(uint32_t nowMs)
@@ -177,9 +179,9 @@ void UiController::onLongPress(uint32_t nowMs)
     queueInput(Input::Hold, 0, nowMs);
 }
 
-void UiController::onTurn(int8_t detents, uint32_t nowMs)
+void UiController::onTurn(int8_t detents, uint32_t nowMs, bool fast)
 {
-    queueInput(Input::Turn, detents, nowMs);
+    queueInput(Input::Turn, detents, nowMs, fast ? static_cast<int16_t>(detents * (kFastFactor - 1)) : 0);
 }
 
 void UiController::applyClick(uint32_t nowMs)
@@ -199,7 +201,7 @@ void UiController::applyClick(uint32_t nowMs)
         clickTick();
         return;
     }
-    if (_ignoreArmed && _screen != Screen::Jog && within(nowMs, _ignoreFrom, kIgnoreMs))  // M2 (not Jog: the axis toggle follows a jog)
+    if (_ignoreArmed && _screen != Screen::Adjust && within(nowMs, _ignoreFrom, kIgnoreMs))  // M2 (not Adjust: the axis click follows a move)
         return;
     clickScreen(nowMs);
 }
@@ -219,11 +221,11 @@ void UiController::applyHold(uint32_t nowMs)
     holdScreen();
 }
 
-void UiController::applyTurn(int8_t detents, uint32_t nowMs)
+void UiController::applyTurn(int8_t detents, int16_t extra, uint32_t nowMs)
 {
     _lastInputMs = nowMs;
-    // Turning does nothing while moving, except jogging on the Jog screen (M4).
-    if (moving() && !(_screen == Screen::Jog && (_m.state == MountState::Jogging || !mountMoving())))
+    // Turning does nothing while moving, except on Adjust: it continues a jog or step move (not while homing or parking).
+    if (moving() && !(_screen == Screen::Adjust && _m.state != MountState::Homing && _m.state != MountState::Parking))
         return;
     if (_saver)
     {
@@ -232,7 +234,8 @@ void UiController::applyTurn(int8_t detents, uint32_t nowMs)
     }
     if (_faultPage)
         return;
-    turnScreen(detents, nowMs);
+    const int eff = _screen == Screen::Adjust ? detents : detents + extra;  // Adjust moves exactly detents * step
+    turnScreen(static_cast<int8_t>(eff > 127 ? 127 : (eff < -127 ? -127 : eff)), nowMs);
 }
 
 void UiController::openMenu()
@@ -276,32 +279,57 @@ void UiController::clickScreen(uint32_t nowMs)
             if (_editor.click())
                 editorDone();
             break;
-        case Screen::GotoConfirm:
-            if (within(nowMs, _screenFrom, kArmMs))  // S4: GO armed 600 ms after the screen appeared
+        case Screen::PointConfirm:
+            if (within(nowMs, _screenFrom, kArmMs))  // S4: armed 600 ms after the screen appeared (GO and SYNC alike)
                 break;
-            evalGoto();  // the target moved since the confirm screen opened: check again with the current snapshot
-            if (_check != TargetCheck::Ok)
+            if (_pointSync)
+            {
+                clickTick();
+                push(UiAction::Kind::Sync, _ra, _dec);
+                showTransient(TextId::HdrSynced, kSyncedMs, nowMs);
+            }
+            else
+            {
+                evalGoto();  // the target moved since the confirm screen opened: check again with the current snapshot
+                if (_check != TargetCheck::Ok)
+                {
+                    push(UiAction::Kind::BeepError);
+                    _screen = Screen::Refused;
+                    break;
+                }
+                clickTick();
+                push(UiAction::Kind::Goto, _ra, _dec);
+            }
+            _haveTarget = true, _tgtRa = _ra, _tgtDec = _dec;  // the target for Adjust -> Sync on target
+            _screen = Screen::Status;
+            break;
+        case Screen::Adjust:  // next axis; AZ and Focus only when configured
+        {
+            clickTick();
+            uint8_t next = _axis;
+            do
+                next = static_cast<uint8_t>((next + 1) % 4);
+            while ((next == 2 && !_m.hasAz) || (next == 3 && !_m.hasFocus));
+            _axis = next;
+            if (_axis >= 2 && _stepSel >= 5)  // no JOG on AZ and Focus
+                _stepSel = 4;
+            break;
+        }
+        case Screen::SetHomeConfirm:
+            if (_m.state != MountState::Idle)  // the lock again at the click
             {
                 push(UiAction::Kind::BeepError);
-                _screen = Screen::Refused;
+                _screen = Screen::AdjustOptions;
                 break;
             }
             clickTick();
-            push(UiAction::Kind::Goto, _ra, _dec);
-            _haveTarget = true, _tgtRa = _ra, _tgtDec = _dec;
-            _screen = Screen::Status;
-            break;
-        case Screen::SyncConfirm:
-            if (within(nowMs, _screenFrom, kArmMs))  // armed like GO: a wrong sync defeats the Sun and altitude guards
-                break;
-            clickTick();
-            push(UiAction::Kind::Sync, _ra, _dec);
-            showTransient(TextId::HdrSynced, kSyncedMs, nowMs);
+            push(UiAction::Kind::SetHome);
+            showTransient(TextId::HdrHomeSet, kSyncedMs, nowMs);
             _screen = Screen::Status;
             break;
         case Screen::Refused:  // S9: back to the RA editor, values kept
             clickTick();
-            openEditor(Edit::GotoRa, _ra);
+            openEditor(Edit::PointRa, _ra);
             break;
         case Screen::ClearsSync:  // yes
             clickTick();
@@ -309,17 +337,6 @@ void UiController::clickScreen(uint32_t nowMs)
                 push(_pending[i].kind, _pending[i].a);
             _pendingN = 0;
             _screen = _ret;
-            break;
-        case Screen::SetHomeConfirm:
-            clickTick();
-            push(UiAction::Kind::SetHome);
-            showTransient(TextId::HdrHomeSet, kSyncedMs, nowMs);
-            _screen = Screen::Status;
-            break;
-        case Screen::Jog:
-            clickTick();
-            jogStop();
-            _jogDec = !_jogDec;
             break;
         default:  // list screens
             clickList(nowMs);
@@ -344,26 +361,13 @@ void UiController::clickMenu(uint32_t nowMs)
             push(_m.state == MountState::Tracking ? UiAction::Kind::TrackOff : UiAction::Kind::TrackOn);
             _screen = Screen::Status;
             break;
-        case RowJog:
-            _screen = Screen::JogMenu;
-            break;
-        case RowGoto:  // S2: prefilled with the last target, else where the mount points
+        case RowPoint:  // S2: prefilled with the last target, else where the mount points
             _ra = _haveTarget ? _tgtRa : _m.raSeconds;
             _dec = _haveTarget ? _tgtDec : _m.decArcSec;
-            openEditor(Edit::GotoRa, _ra);
+            openEditor(Edit::PointRa, _ra);
             break;
-        case RowSync:  // prefilled with where the mount points
-            _ra = _m.raSeconds, _dec = _m.decArcSec;
-            openEditor(Edit::SyncRa, _ra);
-            break;
-        case RowSyncTarget:  // S2: straight to the confirm with the last GoTo target
-            openSync(_tgtRa, _tgtDec);
-            break;
-        case RowSetup:
-            _screen = Screen::Setup;
-            break;
-        case RowHomePark:
-            _screen = Screen::HomePark;
+        case RowAdjust:  // keeps the last axis and step size
+            _screen = Screen::Adjust;
             break;
         case RowSettings:
             _screen = Screen::Settings;
@@ -391,21 +395,22 @@ void UiController::holdScreen()
             _pendingN = 0;
             _screen = _ret;
             break;
+        case Screen::Setup:  // long press is back, one level up
+            _screen = Screen::Settings;
+            _sel = 0;
+            break;
+        case Screen::Adjust:  // not moving here (moving is STOP): the options
+            _sel = 0;
+            _screen = Screen::AdjustOptions;
+            break;
         case Screen::SetHomeConfirm:
-            _screen = Screen::HomePark;
+            _screen = Screen::AdjustOptions;
             break;
-        case Screen::Jog:
-            jogStop();
-            _screen = Screen::JogMenu;
-            break;
-        case Screen::Setup:
-        case Screen::HomePark:
+        case Screen::AdjustOptions:
         case Screen::Settings:
-        case Screen::JogMenu:
-        case Screen::GotoConfirm:
-        case Screen::SyncConfirm:
+        case Screen::PointConfirm:
         case Screen::Refused:
-            openMenu();  // cancel / back to the menu
+            openMenu();
             break;
     }
 }
@@ -423,13 +428,15 @@ void UiController::turnScreen(int8_t detents, uint32_t nowMs)
         case Screen::Editor:
             _editor.turn(detents);
             break;
-        case Screen::Jog:
-            turnJog(detents, nowMs);
+        case Screen::PointConfirm:  // GO <-> SYNC, clamped
+            _pointSync = detents > 0 ? true : (detents < 0 ? false : _pointSync);
             break;
-        case Screen::JogMenu:
+        case Screen::Adjust:
+            turnAdjust(detents, nowMs);
+            break;
         case Screen::Setup:
-        case Screen::HomePark:
         case Screen::Settings:
+        case Screen::AdjustOptions:
         {
             Item it[kItems];
             const int s = _sel + detents, n = items(it);
@@ -445,40 +452,32 @@ void UiController::turnScreen(int8_t detents, uint32_t nowMs)
 
 TextId UiController::row0Label() const
 {
-    if (moving())
+    if (mountMoving() || _jogDir != 0)  // not the step latch: it would flip the row and arm the M2 click ignore
         return TextId::Stop;
     return _m.state == MountState::Tracking ? TextId::StopTracking : TextId::TrackHere;
 }
 
 TextId UiController::rowLabel(uint8_t row) const
 {
-    static const TextId kRows[RowCount] = {TextId::TrackHere, TextId::Jog,      TextId::GotoRaDec, TextId::SyncRaDec, TextId::SyncOnTarget,
-                                           TextId::Setup,     TextId::HomePark, TextId::Settings,  TextId::Back};
+    static const TextId kRows[RowCount] = {TextId::TrackHere, TextId::Point, TextId::Adjust, TextId::Settings};
     return row == RowMotion ? row0Label() : kRows[row];
 }
 
 TextId UiController::rowLock(uint8_t row) const
 {
-    if (moving())  // S5: only STOP, Settings and Back live; any click is STOP anyway
-        return (row == RowMotion || row == RowSettings || row == RowBack) ? TextId::Count : TextId::FootStop;
-    if (faultActive() && row <= RowSyncTarget && !(row == RowMotion && row0Label() == TextId::StopTracking))
+    if (moving())  // S5: only STOP and Settings live; any click is STOP anyway
+        return (row == RowMotion || row == RowSettings) ? TextId::Count : TextId::FootStop;
+    if (faultActive() && row <= RowAdjust && !(row == RowMotion && row0Label() == TextId::StopTracking))
         return faultText();  // fault: motion rows locked, "Stop tracking" and Settings stay live
-    const bool parked = _m.state == MountState::Parked;
     const bool dt = dateTimeSet();  // M6: both date and time
     switch (row)
     {
         case RowMotion:
             if (row0Label() == TextId::StopTracking)
                 return TextId::Count;  // stopping is never locked
-            return parked ? TextId::MsgUnparkFirst : (dt ? TextId::Count : TextId::MsgDateTimeFirst);
-        case RowJog:
-            return parked ? TextId::MsgUnparkFirst : TextId::Count;
-        case RowGoto:
-            return parked ? TextId::MsgUnparkFirst : (dt ? TextId::Count : TextId::MsgDateTimeFirst);
-        case RowSync:
             return dt ? TextId::Count : TextId::MsgDateTimeFirst;
-        case RowSyncTarget:
-            return !dt ? TextId::MsgDateTimeFirst : (_haveTarget ? TextId::Count : TextId::MsgNoTarget);
+        case RowPoint:  // GO and SYNC both need the clock
+            return dt ? TextId::Count : TextId::MsgDateTimeFirst;
         default:
             return TextId::Count;
     }
@@ -563,12 +562,14 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
         else if (in.kind == Input::Hold)
             applyHold(in.ms);
         else
-            applyTurn(in.detents, in.ms);
+            applyTurn(in.detents, in.extra, in.ms);
     }
     _inCount = 0;
 
     if (_jogDir && !within(nowMs, _jogMs, kJogStopMs))  // M4: stop 300 ms after the last detent
         jogStop();
+    if (_stepLatch && (mountMoving() || !within(nowMs, _stepMs, kStepLatchMs)))  // the snapshot caught up, or the move was too short to show
+        _stepLatch = false;
 
     // Expire latches (after the inputs, which may carry older stamps), so a signed difference never
     // sees them again after 2^31 ms.
@@ -580,7 +581,7 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
         _message = TextId::Count;
 
     const bool stopped = _transient == TextId::HdrStopped && within(nowMs, _transientFrom, _transientMs);
-    if (prev == MountState::Slewing && m.state == MountState::Tracking && !stopped)  // S8: GoTo ends tracking; STOP ends idle
+    if (prev == MountState::Slewing && m.state == MountState::Tracking && !stopped && _screen != Screen::Adjust)  // S8: GoTo ends tracking; STOP ends idle
     {
         showTransient(TextId::HdrArrived, kArrivedMs, nowMs);
         push(UiAction::Kind::Beep);
@@ -664,8 +665,7 @@ void UiController::renderScreen(Canvas &c) const
         case Screen::Editor:
             renderEdit(c);
             break;
-        case Screen::GotoConfirm:
-        case Screen::SyncConfirm:
+        case Screen::PointConfirm:
             renderConfirm(c);
             break;
         case Screen::Refused:
@@ -674,17 +674,16 @@ void UiController::renderScreen(Canvas &c) const
         case Screen::ClearsSync:
             renderSmallConfirm(c, TextId::HdrSetup, TextId::ClearsSync);
             break;
+        case Screen::Setup:
+        case Screen::Settings:
+        case Screen::AdjustOptions:
+            renderList(c);
+            break;
+        case Screen::Adjust:
+            renderAdjust(c);
+            break;
         case Screen::SetHomeConfirm:
             renderSmallConfirm(c, TextId::HdrHome, TextId::SetHomeQ);
-            break;
-        case Screen::Jog:
-            renderJog(c);
-            break;
-        case Screen::JogMenu:
-        case Screen::Setup:
-        case Screen::HomePark:
-        case Screen::Settings:
-            renderList(c);
             break;
     }
 }
@@ -797,7 +796,7 @@ void UiController::renderMenu(Canvas &c) const
     {
         const TextId lock = rowLock(r);
         const char *label = t(rowLabel(r));
-        const char *tag = lock == TextId::MsgDateTimeFirst ? t(TextId::TagTime) : (lock == TextId::MsgUnparkFirst ? t(TextId::TagPark) : "");
+        const char *tag = lock == TextId::MsgDateTimeFirst ? t(TextId::TagTime) : "";
         if (*tag && cols(label) + 1 + cols(tag) <= 19)  // S6 tag right-aligned at column 19 when it fits
             row(it[r].s, sizeof it[r].s, label, tag);
         else

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] - 2026-11-10
+
+### Added
+
+- LCD Adjust page: turn moves RA, DEC, AZ or Focus by the chosen step size (1 to 10 000 steps, coalesced per tick) or jogs at SLOW to MAX; click picks the axis, hold opens Step size, Sync on target, Set home here (idle only, confirm) and Go home. Shows the axis position and the step in degrees; a failed AZ/Focus driver refuses the move; click or hold while moving still stops.
+- Firmware groundwork for the Adjust page: a move-by-steps UI action (same `Mount::moveStepperBy` as LX200 `:MX`), AZ/Focus/position fields in the UI snapshot, and Set home here that works before date and time are set.
+- Focus motor on the Robin E3 E socket (bipolar-modded 28BYJ-48, TMC2209 UART, 91 mA RMS, 16 microsteps). EN stays high until the UART current is set, a failed UART test refuses every focus move without changing position, and the build stops with `#error` unless `UART_CONNECTION_TEST_TXRX` is 1.
+- LCD: AZ and Focus moves count as moving (the bar shows STOP and any click or hold stops them), and step moves accumulate instead of restarting.
+
+### Changed
+
+- RA and DEC step moves (`:MX`) resume tracking only if it was on before; from idle they stay idle (upstream started tracking on arrival).
+- LX200 park `:hP#` goes home with tracking off and unpark `:hU#` is a no-op on the Robin E3 (there is no parked state).
+- LCD menus are Track here, Point, Adjust and Settings. Point merges GoTo, Sync and Sync on target: RA, Dec, then a confirm screen where the knob picks GO or SYNC. Setup (date, time, UTC offset, position) moved under Settings, Jog and Home/Park rows are gone, and a long press goes back one level on every screen (it still stops a moving mount).
+
+### Fixed
+
+- Go home (LCD) and park `:hP#` now end idle at the markers: RA and DEC stop exactly at step 0, tracking stays off and the tracker-off catch-up move (which blocked the main loop and ran RA past the markers) is skipped.
+- Adjust moves exactly the step size per detent (the knob's fast-turn x5 now only applies in menus and editors), and a click in the same tick as a step move is STOP instead of cycling the axis.
+- Focus TMC2209 uses the same TOFF/TBL, PWM frequency and supply-voltage PWM offset as the other axes, and its EN pin never goes low after a failed UART test, also with `FOCUSER_ALWAYS_ON 1`.
+
 ## [v0.2.1] - 2026-11-10
 
 ### Changed

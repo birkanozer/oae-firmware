@@ -24,13 +24,15 @@
 #define DEC_STEPPER_TYPE   STEPPER_TYPE_ENABLED
 #define AZ_STEPPER_TYPE    STEPPER_TYPE_ENABLED
 #define ALT_STEPPER_TYPE   STEPPER_TYPE_NONE
-#define FOCUS_STEPPER_TYPE STEPPER_TYPE_NONE
+#define FOCUS_STEPPER_TYPE STEPPER_TYPE_ENABLED
 
 #define RA_DRIVER_TYPE  DRIVER_TYPE_TMC2209_UART
 #define DEC_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
 // AZ: bipolar-modded 28BYJ-48 on the Z socket (step PC14, dir PC15, EN PB8, UART PC12). ALT must stay off, it shares the
 // socket. For the stock ULN2003 board instead, see docs/wiring.md.
 #define AZ_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
+// Focus: bipolar-modded 28BYJ-48 on the E socket (step PB4, dir PB3, EN PB5, UART PC11), same motor rules as AZ.
+#define FOCUS_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
 
 // Motors rated at 470 mA, run at 75 % (RMS computed by Configuration_adv.hpp).
 #define RA_MOTOR_CURRENT_RATING      470  // mA
@@ -63,6 +65,17 @@
 #define AZ_MICROSTEPPING        16
 #define AZ_STEPPER_SPEED        (400 * AZ_MICROSTEPPING)
 #define AZ_STEPPER_ACCELERATION (200 * AZ_MICROSTEPPING)
+
+// Focus: same motor and current rule as AZ (150 mA peak = 91 mA RMS), hold low, released when idle (FOCUSER_ALWAYS_ON 0).
+// Speed and acceleration in microsteps/s, like AZ.
+#define FOCUS_MOTOR_CURRENT_RATING      150  // mA, peak
+#define FOCUS_OPERATING_CURRENT_SETTING 100  // %
+#define FOCUSER_MOTOR_HOLD_SETTING      30
+#define FOCUSER_ALWAYS_ON               0
+#define FOCUS_STEPPER_SPR               2048
+#define FOCUS_MICROSTEPPING             16
+#define FOCUS_STEPPER_SPEED             (400 * FOCUS_MICROSTEPPING)
+#define FOCUS_STEPPER_ACCELERATION      (200 * FOCUS_MICROSTEPPING)
 
 // A driver that does not answer on its UART is disabled (EN high) instead of running at the board's VREF current.
 #define UART_CONNECTION_TEST_TXRX 1

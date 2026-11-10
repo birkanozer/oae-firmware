@@ -136,6 +136,9 @@
         #endif
     #endif
 
+#elif defined(ARDUINO_ARCH_STM32)
+// Valid (Robin E3, driver pins checked below)
+
 #else
     #warning Configuration does not support Focus. Use at own risk.
 #endif
@@ -488,4 +491,10 @@
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3 && AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART                \
     && UART_CONNECTION_TEST_TXRX != 1
     #error AZ on a TMC2209 UART needs UART_CONNECTION_TEST_TXRX 1 on the Robin E3
+#endif
+
+// Same for the focuser on the E socket.
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART            \
+    && UART_CONNECTION_TEST_TXRX != 1
+    #error Focus on a TMC2209 UART needs UART_CONNECTION_TEST_TXRX 1 on the Robin E3
 #endif

@@ -32,11 +32,11 @@ them), plate solving, autoguiding, a native iOS/Android app.
   (app from GitHub Pages)         ↕ byte pipe              USART2     mount model, limits, homing)
  iPhone: Safari ── hotspot ────► WiFi STA on the iPhone's           ├ TMC2209 X  → RA   (NEMA17 0.9°)
   (app served by the ESP32        hotspot: HTTPS app +              ├ TMC2209 Y  → DEC
-   over HTTPS, WSS link)          WSS byte pipe; LX200 TCP          ├ TMC2209 Z  → free (ALT / AZ bipolar)
- Phone does: catalog,             :4030 for Stellarium              ├ TMC2209 E  → free (focus bipolar)
+   over HTTPS, WSS link)          WSS byte pipe; LX200 TCP          ├ TMC2209 Z  → AZ    (bipolar 28BYJ-48)
+ Phone does: catalog,             :4030 for Stellarium              ├ TMC2209 E  → Focus (bipolar 28BYJ-48)
  ephemerides, RA/Dec↔Az/Alt,                                        │
- GPS + time, plane fetch,                                           ├ ULN2003 A (PB13/PB14/PB15/PA15) → AZ 28BYJ-48
- settings UI (EN/TR)                                                ├ ULN2003 B (PA7/PC4/PC5/PC10) → focus 28BYJ-48
+ GPS + time, plane fetch,                                           ├ ULN2003 A (PB13/PB14/PB15/PA15) → AZ alt. drive (unused here)
+ settings UI (EN/TR)                                                ├ ULN2003 B (PA7/PC4/PC5/PC10) → focus alt. drive (unused here)
                                                                     ├ endstops X-/Y-/Z-/Z+ (microswitch)
                                                                     ├ stock Ender 3 LCD (ST7920, knob, buzzer)
                                                                     │   on the "Ender-3 EXP1" header
@@ -96,17 +96,34 @@ A **graphical UI** for the knob, not OAT's 16×2 menus (OAT's `DISPLAY_TYPE` sta
 logic lives in `src/core/ui/` (host-tested); the STM32 glue is in `src/adapters/`.
 
 - **Status** (home): state and clock, RA, Dec, HA, Alt/Az, LST and UTC.
-- **Track here, GoTo, Sync**: track wherever the mount points; GoTo RA/Dec with a minimum-altitude
-  and Sun-distance check before the slew; Sync to the entered coordinates.
-- **Jog, Home, Park**: jog RA or Dec with the knob. Home and park are started and polled, so the
-  UI never blocks.
+- **Main menu**: Track here / Stop tracking / STOP (row 0), Point, Adjust, Settings. A long press
+  goes back one level on every screen (it still stops a moving mount); there is no park.
+- **Point**: RA and Dec editors, then a confirm screen where the knob picks GO (GoTo, with a
+  minimum-altitude and Sun-distance check) or SYNC (to the entered coordinates). The coordinates
+  become the target for Adjust's Sync on target.
+- **Adjust**: turn moves the selected axis (RA, DEC, AZ, Focus) by exactly one step size per
+  detent (no knob acceleration), or jogs at SLOW to MAX; click picks the axis (a click while a move
+  runs is STOP); a long press opens Step size, Sync on target, Set home here and Go home. Go home is
+  started and polled, so the UI never blocks, and it ends idle at the markers (no tracking, no
+  catch-up move). Date and time are not needed.
+  The LX200 list below is what the phone uses for the same moves.
+- **LX200 for Adjust, Sync and home** (same `Mount` calls as the screen; replies in brackets):
+  - Move by steps, signed, microsteps of that axis in slew mode: `:MXr<n>#` RA, `:MXd<n>#` DEC,
+    `:MXz<n>#` AZ, `:MXf<n>#` Focus, e.g. `:MXr-100#` [`1`]. RA keeps tracking when it was on and
+    stays idle when it was not. AZ and Focus refuse while their driver failed its UART test.
+  - Sync to coordinates: `:SrHH:MM:SS#` then `:SdsDD*MM:SS#` then `:CM#`, or in one go
+    `:SYsDD*MM:SS.HH:MM:SS#`. Home stays at the markers.
+  - Set home here: `:SHP#` [`1`]. Works without date and time (the sky reference is taken when
+    both are set) and drops any Sync offset.
+  - Go home: `:hF#` goes home and keeps or starts tracking; `:hP#` (the old park) goes home and
+    ends untracked. `:hU#` (unpark) only replies `1`.
 - **Settings**: language, minimum altitude, beep, supply voltage (12/24 V). RAM-only until the
   slice 3 settings table persists them.
 - **Safety**: any click stops motion; GoTo, Sync and Track need date and time set since boot; a
   driver fault shows a fault page with motors stopped.
 
 The full layout and interaction rules, with the bench checklist, are in
-`plans/dwin-ui/2026-11-10-lcd-ui-design.md`. The screen and the phone can be connected at once;
+`plans/archive/dwin-ui/2026-11-10-lcd-ui-design.md`. The screen and the phone can be connected at once;
 the firmware stays the single authority, and the screen redraws from mount state, so either side's
 command shows up on both.
 

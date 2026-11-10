@@ -71,7 +71,7 @@ TEST(UiControllerTest, MenuOpensAtRow0)
     EXPECT_TRUE(u.drew("MENU"));
     EXPECT_TRUE(u.inv("Stop tracking"));
     u.turn(3);
-    EXPECT_TRUE(u.inv("Sync RA/Dec"));
+    EXPECT_TRUE(u.inv("Settings"));
     u.hold();
     EXPECT_TRUE(u.drew("click: menu"));
     u.click();
@@ -139,9 +139,9 @@ TEST(UiControllerTest, AnyClickStopsLx200Motion)
     Ui u;
     u.tick();
     u.click();
-    u.turn(5);  // Setup
+    u.turn(3);  // Settings
     u.click(1000);
-    EXPECT_TRUE(u.drew("SETUP"));
+    EXPECT_TRUE(u.drew("SETTINGS"));
     u.actions();
     u.state(MountState::Slewing, 1000);
     EXPECT_TRUE(u.inv("click: STOP"));  // footer of every screen while moving
@@ -215,7 +215,7 @@ TEST(UiControllerTest, LongPressAlsoStopsWhileMoving)
     }
 }
 
-TEST(UiControllerTest, TurnDoesNothingWhileMovingOutsideJog)
+TEST(UiControllerTest, TurnDoesNothingWhileMoving)
 {
     Ui u;
     u.tick();
@@ -542,17 +542,21 @@ TEST(UiControllerTest, TwentyFiveDayIdleRun)
     u.click();  // STOP: STOPPED latch
     u.state(MountState::Idle, 1000);  // row 0 changes: ignore latch
     u.click(1000);  // menu
-    u.turn(4);
-    u.click(10);  // Sync on target locked: message latch
-    EXPECT_TRUE(u.inv("No GoTo target yet"));
+    u.m.timeSet = false;
+    u.tick(10);
+    u.turn(1);
+    u.click(10);  // Point locked: message latch
+    EXPECT_TRUE(u.inv("Set date+time first"));
     for (int i = 0; i < 25 * 24 * 60; ++i)
         u.tick(60000);
     EXPECT_TRUE(u.drew("turn to wake"));
     EXPECT_FALSE(u.drew("STOPPED"));
     u.click();  // wake
-    EXPECT_FALSE(u.drew("No GoTo target yet"));
+    EXPECT_FALSE(u.drew("Set date+time first"));
     u.hold();  // menu -> status
     EXPECT_FALSE(u.drew("STOPPED"));
+    u.m.timeSet = true;
+    u.tick(10);
     u.actions();
     u.click();  // menu
     u.click();  // Track here, not swallowed by a stale window
@@ -592,13 +596,13 @@ TEST(UiControllerTest, FaultLocksMotionRows)
     EXPECT_TRUE(Ui::has(a, Kind::BeepError));
     EXPECT_FALSE(Ui::has(a, Kind::TrackOn));
     EXPECT_TRUE(u.inv("RA DRIVER FAULT"));
-    for (int i = 1; i <= 4; ++i)  // Jog, GoTo, Sync, Sync on target
+    for (int i = 1; i <= 2; ++i)  // Point, Adjust
     {
         u.turn(1, 2100);
         u.click();
         EXPECT_TRUE(Ui::has(u.actions(), Kind::BeepError)) << i;
     }
-    u.turn(3, 2100);  // Settings stays live
+    u.turn(1, 2100);  // Settings stays live
     u.click();
     EXPECT_FALSE(Ui::has(u.actions(), Kind::BeepError));
     EXPECT_TRUE(u.drew("SETTINGS"));
@@ -654,4 +658,14 @@ TEST(UiControllerTest, LongPressStopsOnFaultPageAndSaverWhileMoving)
     v.ui.onLongPress(v.t);  // pressed as an LX200 GoTo starts under the saver
     v.state(MountState::Slewing, 0);
     EXPECT_TRUE(Ui::has(v.actions(), Kind::Stop));
+}
+
+TEST(UiControllerTest, SnapshotDefaultsHaveNoAzFocus)
+{
+    const core::MountSnapshot s{};
+    EXPECT_FALSE(s.hasAz);
+    EXPECT_FALSE(s.hasFocus);
+    for (int i = 0; i < 4; i++)
+        EXPECT_EQ(s.axisPos[i], 0);
+    EXPECT_GT(static_cast<int>(core::UiAction::Kind::MoveSteps), static_cast<int>(core::UiAction::Kind::SetSupplyVoltage));
 }
