@@ -52,6 +52,10 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Debate
 
+- USB transmit dead on our board (2026-11-10): USART1 configured and receiving (PC → board works), but
+  nothing reaches COM6, even bytes written straight to USART1 DR over SWD; PA9 idles high as AF push-pull.
+  Suspect the PA9 → CH340C RXD (pin 3) trace/resistor. Skipped for now: bench LX200 runs over USART2 via the
+  ESP32-S3. Continuity check later (PSU and USB off).
 - Other boards (ramps, esp32, rp2040) are not compiled locally after the STM32 changes to shared files
   (`f_serial.hpp`, `MeadeParserSet.cpp`, `SiderealClock.cpp`, `Configuration_adv.hpp`); only native tests and
   `robin_e3` run in the gate. Run them once those toolchains are installed, or rely on upstream CI.

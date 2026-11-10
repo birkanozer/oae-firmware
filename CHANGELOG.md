@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.1] - 2026-11-10
+
+### Fixed
+
+- `robin_e3` USB serial (`Serial`) now runs on USART1 PA9/PA10 as intended; it had been built on USART2
+  (PA2/PA3), shared with the bridge `Serial2`, so the USB port never came up. Receive verified on the
+  bench; transmit to the PC still shows nothing on our board (board-level PA9 → CH340 path, see BACKLOG).
+
 ## [v0.1.0] - 2026-11-10
 
 ### Added
