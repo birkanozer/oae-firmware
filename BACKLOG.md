@@ -24,6 +24,12 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Bugs
 
+- Upstream parser input validation (security review, 2026-11-10): `:SC` date (MeadeParserSet.cpp)
+  accepts month/day out of range → bad index in `calculateDeltaJd`; range-check RA/DEC/lat/HA/time
+  fields too. GPS command in MeadeCommandProcessor.cpp takes an unbounded, unchecked timeout and
+  blocks the main loop → strtol, reject negatives, clamp to 2 min. Must land before the bridge
+  exposes the parser over BLE/WiFi (slice 4); pair with BLE bonding/whitelist.
+
 ## Debate
 
 - Board reports 1.99 V target voltage on ST-Link alone. Re-probe and re-dump on PSU; compare
