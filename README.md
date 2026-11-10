@@ -48,6 +48,26 @@ cd firmware
 
 Full gate (native tests + `robin_e3` build), from the repo root: `bash tools/gate.sh`.
 
+## Onboard screen
+
+The stock Ender 3 LCD (128×64, knob with click, buzzer) runs the mount with no phone. It plugs
+into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md).
+
+- **Turn** moves the cursor, or changes the field in an editor. **Click** selects. **Hold** goes
+  back. In an editor, hold goes to the previous field (on the first field it cancels).
+- **Any click or hold stops motion.** While the mount slews, jogs, parks or homes, a click or hold
+  on any screen issues STOP, which halts every motor including tracking. The footer shows
+  `click: STOP`. Turning the knob does nothing during motion, except on the Jog screen.
+- **Jog:** turn to move. The slew stops 0.3 s after the knob stops. Click toggles RA and DEC; hold
+  returns to the submenu. Speed cycles SLOW / CENTER / FIND / MAX.
+- **GoTo, Sync and Track here stay locked** until both date and time are set since boot. The status
+  screen names what is missing; click the warning to go straight to Date, then Time.
+- **GoTo refuses** targets below the minimum altitude or within 15° of the Sun. The refused screen
+  returns to the editor with the values kept.
+- **Settings** has language (EN/TR), minimum altitude, beep, and supply (12 V or 24 V, default
+  24 V). Supply sets the TMC2209 starting values and caps slew speed at 70 % on 12 V. Screen
+  settings reset at boot until settings storage lands (slice 3).
+
 ## License
 
 MIT, see [firmware/LICENSE](firmware/LICENSE). OAE mechanical design is CC BY-NC by

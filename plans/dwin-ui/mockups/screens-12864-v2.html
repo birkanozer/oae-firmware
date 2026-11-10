@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OAE 12864 Mockups v2</title>
+<style>
+  body { margin: 0; padding: 24px; background: #2b2b2b; color: #ddd; font: 14px system-ui, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  p.note { margin: 0 0 14px; color: #aaa; max-width: 1640px; }
+  .boxes { display: grid; grid-template-columns: 820px 820px; gap: 20px; margin-bottom: 18px; }
+  .box { background: #1f1f1f; border: 1px solid #555; border-radius: 6px; padding: 10px 14px; font-size: 12.5px; line-height: 1.4; }
+  .box h2 { margin: 0 0 6px; font-size: 15px; color: #fff; }
+  .box ul { margin: 0; padding-left: 18px; }
+  .box li { margin-bottom: 2px; }
+  .box code, figcaption code { color: #9cf; }
+  .lint { margin-bottom: 14px; padding: 6px 12px; border-radius: 6px; font-weight: bold; }
+  .lint.ok { background: #14361c; color: #8f8; } .lint.bad { background: #4a1414; color: #f88; }
+  .grid { display: grid; grid-template-columns: repeat(3, 532px); gap: 22px 26px; }
+  h3 { grid-column: 1 / -1; margin: 10px 0 -8px; font-size: 15px; color: #8ab; border-bottom: 1px solid #444; padding-bottom: 3px; }
+  figure { margin: 0; }
+  .bezel { background: #111; padding: 10px; border-radius: 6px; width: 512px; }
+  canvas { display: block; image-rendering: pixelated; width: 512px; height: 256px; }
+  figcaption { margin-top: 6px; color: #ccc; font-size: 13px; line-height: 1.35; }
+  figcaption b { color: #fff; } figcaption i { color: #fc6; font-style: normal; }
+</style>
+</head>
+<body>
+<h1>OAE Robin E3 — Ender 3 stock LCD (ENH12864Z-1, ST7920, 128×64) mockups v2, shown ×4</h1>
+<p class="note">Each screen is a real 128×64 one-bit bitmap: layout, cell sizes and inversions are exact for the U8g2 fonts named (5×7, 6×10, 7×13 bold, 10×20). Glyph shapes are approximated by thresholding a system monospace font. Light pixels on the blue backlight. Knob: turn = move, click = select, hold (≥700 ms) = back / previous group. Header is 6×10 text with a dotted rule (no inverted bar); inversion is reserved for the selection bar, alerts and the STOP footer. Width limits enforced by the renderer: menu rows 19 cols, header state ≤12 cols beside an 8-col clock, other 6×10 lines 21 cols, 10×20 lines 12 cols.</p>
+
+<div class="boxes">
+  <div class="box"><h2>Changes from v1 (applied)</h2><ul>
+    <li><b>M1</b> STOP footer bar <code>click: STOP</code> (TR <code>tikla: DURDUR</code>) on every moving screen; click or long press = STOP; GO returns to status; <code>STOPPED</code> header.</li>
+    <li><b>M2</b> Menu row 0 is a fixed motion slot (<code>Track here</code> / <code>STOP</code>); all other rows keep their index; menu opens at row 0.</li>
+    <li><b>M3</b> Saver shows warning line (<code>SET DATE &amp; TIME</code>) and <code>turn to wake</code>; shown only idle/tracking.</li>
+    <li><b>M4</b> Jog = submenu (<code>Jog RA</code>, <code>Jog DEC</code>, <code>Speed x8</code>); click toggles axis; footer <code>click:axis</code>.</li>
+    <li><b>M5</b> SYNC / CONFIRM screen, <code>BIG JUMP - CHECK</code>, <code>SYNCED</code> feedback.</li>
+    <li><b>M6</b> Warning names missing item; both date and time needed to unlock (locked rows shown).</li>
+    <li><b>M7</b> <code>PARKING</code> state with STOP footer (mockup side only).</li>
+    <li><b>S1</b> (a) status click goes to Date then Time; (b) date prefilled; (c) time is hh:mm, <code>click at :00 sec</code>.</li>
+    <li><b>S2</b> <code>Sync on target</code> row, editors prefilled with last target. <b>S3</b> hold = previous group; footer <code>click:next hold:back</code>.</li>
+    <li><b>S4</b> Az added to confirm line (<code>Alt+38° Az161° Sun112</code>). <b>S5</b> moving menu: only STOP/Settings/Back live; Unpark only when parked; <code>Clears Sync. Sure?</code>.</li>
+    <li><b>S6</b> Locked rows: dotted underline + <code>(time)</code> tag; footer message <code>Set date+time first</code>.</li>
+    <li><b>S7</b> New status layout: HA, Alt/Az with °, LST+UTC, target line on GoTo, no progress bar.</li>
+    <li><b>S8</b> <code>ARRIVED</code>, <code>SYNCED</code>, <code>PARKED</code> (menu), <code>Set home here?</code> confirm. <b>S9</b> refused screens (horizon + Sun), <code>click: edit</code>.</li>
+    <li><b>S10</b> E/W, N/S letters (TR K/G, D/B). <b>S11</b> every string width-checked (lint line above). <b>S12</b> TR: <code>Motorla kaydir</code>, <code>Yks</code>, <code>GIT %62</code>.</li>
+    <li><b>S13</b> header = text + dotted rule. <b>S14</b> <code>!</code> in header, FAULT page, <code>BELOW MIN ALT</code>, <code>REBOOTED - SET TIME</code>.</li>
+    <li><b>S15</b> speed as <code>x8</code>, direction footer. <b>S16</b> right-aligned values, <code>0°</code>, <code>Dil/Lang</code>. <b>S17</b> <code>turn to wake</code>. <b>S18</b> one footer scheme. <b>S19</b> labels: <code>DE</code> status / <code>Dec</code> menu / <code>DEC</code> header, 6×10 header, step on all editors, no menu index, <code>"</code> on seconds. <b>S20</b> STOP = all motors, then row 0 = Track here.</li>
+  </ul></div>
+  <div class="box"><h2>NOT applied (and why)</h2><ul>
+    <li><b>Firmware behaviour, not visible on a screen:</b> M1 (LX200 moves also stoppable, long beep), M2 (500 ms click ignore), M3 (saver never during moves, first input only wakes), M7 (bench-check UI loop during park), S1 (d) encoder acceleration, S4 (600 ms click lockout), S8 beeps/timings, S11 unit test (only the on-page lint exists), S15 beeping the speed, S16 build-flag boot language, S2 prefill logic, S14 beep once.</li>
+    <li><b>Conflict resolved:</b> S5 says "show only STOP/Settings/Back" while moving but M2 wants stable indices, so v2 keeps all rows and draws the unavailable ones locked (dotted) instead of hiding them. On <i>Sync on target</i> no target exists before the first GoTo, so that row is absent in the time-not-set menu (rows below it shift only in that state).</li>
+    <li><b>S7 pier side:</b> dropped (audit: only if the mount flips; this mount does not).</li>
+    <li><b>S17 optional blank saver, S14 meridian warning screen</b> (same layout as <code>BELOW MIN ALT</code>), <b>M6 SET DATE / SET TIME variants</b> (same layout as screen 1, only text differs).</li>
+    <li><b>Consider C1-C14:</b> none mocked (C1 Polaris, C2 cold LCD, C3 UTC steps, C4 star list, C5 low-precision editor, C6 wrap-around menu, C7 SET LOCATION/splash, C8 synced marker, C9 red gel, C10 PC indicator, C11 tracking rate, C12 track without time, C13 larger ring, C14 Baslangic/Park). Degree ring kept as the v1 3×3 ring.</li>
+    <li><b>HOMING</b> shares the PARKING layout (TR <code>EVE GIDIYOR</code>); <b>HOME SET</b> feedback shares the SYNCED header layout; status <code>STOPPED</code>/<code>ARRIVED</code> shown once.</li>
+    <li><b>Disagreement:</b> none material; S19 "header 5×7 vs 6×10" decided as 6×10.</li>
+  </ul></div>
+</div>
+<div id="lint" class="lint ok"></div>
+<div class="grid" id="grid"></div>
+<script>
+const W = 128, H = 64;
+const FONTS = { f5: [5, 7, 8, 25], f6: [6, 10, 10, 21], f7: [7, 13, 13, 18], f10: [10, 20, 20, 12] }; // [cellW, cellH, drawPx, maxCols]
+const LCD_BG = [30, 70, 210], LCD_ON = [225, 238, 255], LCD_OFF_TINT = [36, 80, 220];
+const viol = []; let curNo = 0;
+const len = s => [...s].length;
+
+function screen(caption, draw) {
+  curNo++;
+  const fig = document.createElement('figure');
+  const bez = document.createElement('div'); bez.className = 'bezel';
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  bez.appendChild(c); fig.appendChild(bez);
+  const px = new Uint8Array(W * H);
+  const set = (x, y, v = 1) => { if (x >= 0 && y >= 0 && x < W && y < H) px[y * W + x] = v; };
+  const off = document.createElement('canvas'); off.width = 32; off.height = 32;
+  const og = off.getContext('2d', { willReadFrequently: true });
+  function glyph(ch, font, x, y, inv) {
+    const [cw, chh, size] = FONTS[font];
+    if (ch === '°') { for (const [dx, dy] of [[1,0],[0,1],[2,1],[1,2]]) set(x + dx + 1, y + dy + 1, inv ? 0 : 1); return; }
+    og.clearRect(0, 0, 32, 32); og.fillStyle = '#000';
+    og.font = `${font === 'f7' || font === 'f10' ? 'bold ' : ''}${size}px Consolas, "Courier New", monospace`;
+    og.textBaseline = 'top';
+    const mw = og.measureText(ch).width;
+    og.fillText(ch, Math.round((cw - mw) / 2), font === 'f5' ? -1 : 0);
+    const d = og.getImageData(0, 0, cw, chh).data;
+    for (let yy = 0; yy < chh; yy++) for (let xx = 0; xx < cw; xx++) if (d[(yy * cw + xx) * 4 + 3] > 110) set(x + xx, y + yy, inv ? 0 : 1);
+  }
+  const api = {
+    text(font, x, y, s, inv = false) {
+      const cw = FONTS[font][0], n = len(s);
+      if (n > FONTS[font][3] || x + cw * n > W) viol.push(`#${curNo} "${s}" (${n} cols @x=${x})`);
+      [...s].forEach((ch, i) => glyph(ch, font, x + i * cw, y, inv)); return cw * n;
+    },
+    right(font, xr, y, s, inv) { return api.text(font, xr - FONTS[font][0] * len(s), y, s, inv); },
+    center(font, y, s, inv) { return api.text(font, Math.round((W - FONTS[font][0] * len(s)) / 2), y, s, inv); },
+    box(x0, y0, x1, y1) { for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) set(x, y, 1); },
+    frame(x0, y0, x1, y1) { for (let x = x0; x <= x1; x++) { set(x, y0); set(x, y1); } for (let y = y0; y <= y1; y++) { set(x0, y); set(x1, y); } },
+    hline(x0, x1, y) { for (let x = x0; x <= x1; x++) set(x, y); },
+    dots(x0, x1, y, v = 1) { for (let x = x0; x <= x1; x += 2) set(x, y, v); },
+  };
+  draw(api);
+  const g = c.getContext('2d'); const img = g.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) { const col = px[i] ? LCD_ON : ((i % W + Math.floor(i / W)) % 2 ? LCD_BG : LCD_OFF_TINT); img.data.set([...col, 255], i * 4); }
+  g.putImageData(img, 0, 0);
+  const cap = document.createElement('figcaption'); cap.innerHTML = '<b>' + curNo + '.</b> ' + caption; fig.appendChild(cap);
+  document.getElementById('grid').appendChild(fig);
+}
+function section(t) { const h = document.createElement('h3'); h.textContent = t; document.getElementById('grid').appendChild(h); }
+
+// ---- shared layout ----
+// header: text + dotted rule (S13). '!' in last column while a warning is active (S14). inv=true only for FAULT (alert).
+function header(a, left, right, warn, inv) {
+  const total = len(left) + (right ? len(right) + 1 : 0) + (warn ? 1 : 0);
+  if (total > 21 || (right && len(right) === 8 && len(left) > 12)) viol.push(`#${curNo} header "${left}" + "${right || ''}"`);
+  if (inv) a.box(0, 0, 127, 10); else a.dots(0, 127, 11);
+  a.text('f6', 1, 1, left, !!inv);
+  if (warn) a.text('f6', 122, 1, '!', !!inv);
+  if (right) a.right('f6', warn ? 121 : 127, 1, right, !!inv);
+}
+function footer(a, s) { a.dots(0, 127, 53); a.center('f6', 54, s); }
+function alertBar(a, s) { a.box(0, 53, 127, 63); a.center('f6', 54, s, true); }
+function status(a, L, d) {
+  header(a, d.state, d.time, d.bang);
+  a.text('f6', 0, 13, 'RA ' + d.ra + ' HA' + d.ha);
+  a.text('f6', 0, 23, L.de + ' ' + d.dec);
+  a.text('f6', 0, 33, L.al + ' ' + d.alt + '  Az ' + d.az);
+  a.text('f6', 0, 43, d.row4 || ('LST ' + d.lst + ' UTC+3'));
+  if (d.warn) alertBar(a, d.warn); else if (d.stop) alertBar(a, d.stop); else footer(a, d.foot || L.foot);
+}
+// menu items: string or {t, lock, tag}. Rows are 19 columns max (x=2..121). No page index (S19).
+function menu(a, title, items, sel, top = 0, warn) {
+  header(a, title, '', warn);
+  items.slice(top, top + 5).forEach((it, i) => {
+    const o = typeof it === 'string' ? { t: it } : it, y = 13 + i * 10, idx = top + i, on = idx === sel;
+    let s = o.t;
+    if (o.tag && len(s) + 1 + len(o.tag) <= 19) s = s + ' '.repeat(19 - len(s) - len(o.tag)) + o.tag;
+    if (len(s) > 19) viol.push(`#${curNo} menu row "${s}" (${len(s)} > 19)`);
+    if (on) a.box(0, y - 1, 121, y + 8);
+    a.text('f6', 2, y, s, on);
+    if (o.lock) a.dots(2, 2 + 6 * len(s) - 1, on ? y + 8 : y + 9, on ? 0 : 1);
+  });
+  const n = items.length; if (n > 5) { a.frame(124, 12, 127, 63); const h = Math.max(6, Math.round(52 * 5 / n)); const y0 = 12 + Math.round((52 - h) * top / (n - 5)); a.box(125, y0, 126, y0 + h - 1); }
+}
+function editor(a, title, step, groups, sel, sub, foot) {
+  header(a, title, step);
+  const s = groups.join(''), cw = 10, x0 = Math.round((W - cw * len(s)) / 2), y = 14;
+  if (len(s) > 12) viol.push(`#${curNo} editor "${s}"`);
+  let off = 0;
+  groups.forEach((gr, i) => {
+    const sep = /^[:\-°'" ]+$/.test(gr) && gr !== ' ' || gr === ' ';
+    if (i === sel && !sep) { a.box(x0 + off * cw - 1, y - 1, x0 + (off + len(gr)) * cw, y + 20); a.text('f10', x0 + off * cw, y, gr, true); }
+    else a.text('f10', x0 + off * cw, y, gr);
+    off += len(gr);
+  });
+  a.center('f6', 38, sub);
+  footer(a, foot);
+}
+function confirmSmall(a, hdr, rt, msg, yes) {
+  header(a, hdr, rt);
+  a.center('f7', 17, msg);
+  a.box(0, 36, 127, 46); a.center('f6', 37, yes, true);
+  footer(a, 'hold: cancel');
+}
+
+const EN = { de: 'DE', al: 'Alt', az: 'Az', foot: 'click: menu' };
+const TR = { de: 'DE', al: 'Yks', az: 'Az', foot: 'tikla: menu' };
+const trk = { state: 'TRACKING', time: '23:41:07', ra: '05:35:17', ha: '-00:37', dec: "-05°23'28\"", alt: '+38°', az: '161°', lst: '04:58:02' };
+const NAV = ['Track here', 'Jog', 'GoTo RA/Dec', 'Sync RA/Dec', 'Sync on target', 'Setup', 'Home / Park', 'Settings', 'Back'];
+const row = (l, v) => l + ' '.repeat(19 - len(l) - len(v)) + v;
+
+section('Status screens');
+screen('<b>Status — time not set</b>: <code>!</code> in header, alert bar names what is missing; click goes straight to Date then Time editors. <i>M6 S1a S7 S13 S14 S19</i>', a =>
+  status(a, EN, { state: 'IDLE', time: '--:--:--', ra: '--:--:--', ha: ' --:--', dec: "--°--'--\"", alt: '--', az: '---°', lst: '--:--:--', warn: 'SET DATE & TIME', bang: true }));
+screen('<b>Status — tracking</b>: header text + dotted rule, HA, Alt/Az with degrees and 3-digit Az, LST + UTC. <i>S7 S13 S19</i>', a => status(a, EN, trk));
+screen('<b>Status — warning while tracking</b>: persistent <code>!</code>, alert replaces footer hint (3 beeps once). <i>S14</i>', a =>
+  status(a, EN, { ...trk, alt: '+02°', az: '271°', bang: true, warn: 'BELOW MIN ALT' }));
+screen('<b>Status — slewing</b>: target on row 4, no progress bar, inverted STOP footer; click or hold = STOP. <i>M1 S7 M7</i>', a =>
+  status(a, EN, { ...trk, state: 'GOTO 62%', ra: '04:12:40', ha: '-01:48', dec: "+11°08'12\"", alt: '+29°', az: '141°', row4: "> 05:35:17 -05°23'", stop: 'click: STOP' }));
+screen('<b>Status — STOPPED</b>: 2 s after STOP (long beep); STOP stops all motors incl. tracking, then row 0 = Track here. <i>M1 S20</i>', a =>
+  status(a, EN, { ...trk, state: 'STOPPED' }));
+screen('<b>Status — ARRIVED</b>: 3 s after GoTo (2 beeps), then TRACKING. <i>S8</i>', a =>
+  status(a, EN, { ...trk, state: 'ARRIVED' }));
+
+section('Main menu');
+screen('<b>Menu — idle</b>: always opens at row 0, the motion slot (<code>Track here</code> idle / <code>Stop tracking</code> tracking / <code>STOP</code> moving). No page index. <i>M2 S19 S20</i>', a =>
+  menu(a, 'MENU', NAV, 0));
+screen('<b>Menu — scrolled</b>: cursor on <code>Sync on target</code> (14 cols, fits 19). <i>S2 M2</i>', a =>
+  menu(a, 'MENU', NAV, 4, 2));
+screen('<b>Menu — while slewing</b>: row 0 = STOP, every other index unchanged; unavailable rows dotted, only Settings/Back live. <i>M2 S5 M1</i>', a =>
+  menu(a, 'MENU', ['STOP', ...NAV.slice(1).map(t => (t === 'Settings' || t === 'Back') ? t : { t, lock: true })], 0));
+screen('<b>Menu — locked items</b> (time not set): dotted underline + <code>(time)</code> tag; no target yet, so no <code>Sync on target</code> row. <i>S6 M6</i>', a =>
+  menu(a, 'MENU', [{ t: 'Track here', lock: true, tag: '(time)' }, 'Jog', { t: 'GoTo RA/Dec', lock: true, tag: '(time)' }, { t: 'Sync RA/Dec', lock: true, tag: '(time)' }, 'Setup', 'Home / Park', 'Settings', 'Back'], 2, 0, true));
+screen('<b>Locked item clicked</b>: double beep, footer message 2 s, then offers the Date/Time editors. <i>S6 S1a</i>', a => {
+  menu(a, 'MENU', [{ t: 'Track here', lock: true, tag: '(time)' }, 'Jog', { t: 'GoTo RA/Dec', lock: true, tag: '(time)' }, { t: 'Sync RA/Dec', lock: true, tag: '(time)' }, 'Setup'], 2, 0, true);
+  a.box(0, 53, 127, 63); a.center('f6', 54, 'Set date+time first', true);
+});
+
+section('Jog');
+screen('<b>Jog submenu</b> (option A): axis rows plus <code>Speed x8</code> (click cycles x1 x8 x64 MAX); hold returns here. <i>M4 S15</i>', a =>
+  menu(a, 'JOG', ['Jog RA', 'Jog DEC', row('Speed', 'x8'), 'Back'], 0));
+screen('<b>Jog</b> — RA tab active, click toggles RA/DEC; rate as multiple of sidereal; stops 0.3 s after the knob stops. <i>M4 S15</i>', a => {
+  header(a, 'JOG RA', 'x8');
+  a.box(0, 13, 61, 28); a.text('f7', 21, 14, 'RA', true);
+  a.frame(66, 13, 127, 28); a.text('f7', 86, 14, 'DEC');
+  a.text('f6', 0, 32, 'RA 05:35:21');
+  a.text('f6', 0, 42, "DE -05°23'28\"");
+  footer(a, 'turn: E-W click:axis');
+});
+
+section('GoTo');
+screen('<b>GoTo — RA</b> editor, minutes; prefilled with last target; hold = previous group. <i>S3 S2 S18 S19</i>', a =>
+  editor(a, 'GOTO RA', '1/2', ['05', ':', '35', ':', '17'], 2, 'minutes', 'click:next hold:back'));
+screen('<b>GoTo — Dec</b> editor, last group: seconds with <code>"</code> mark, footer <code>click: check</code>. <i>S18 S19</i>', a =>
+  editor(a, 'GOTO DEC', '2/2', ['-', '05', '°', '23', "'", '28', '"'], 5, 'seconds', 'click: check'));
+screen('<b>GoTo — confirm</b>: Alt, Az and Sun distance for a direction sanity check; <code>CLICK = GO</code> shown only once armed (600 ms). Click returns to status. <i>S4 M1</i>', a => {
+  header(a, 'GOTO', 'CONFIRM');
+  a.text('f6', 0, 13, 'RA 05:35:17');
+  a.text('f6', 0, 23, "DE -05°23'28\"");
+  a.text('f6', 0, 33, 'Alt+38° Az161° Sun112');
+  a.box(0, 42, 127, 52); a.center('f6', 43, 'CLICK = GO', true);
+  footer(a, 'hold: cancel');
+});
+screen('<b>GoTo refused — below horizon</b>: clear numbers, click returns to the RA editor with values kept. <i>S9</i>', a => {
+  header(a, 'GOTO', 'REFUSED');
+  a.text('f6', 0, 13, 'RA 18:36:56');
+  a.text('f6', 0, 23, "DE +38°47'01\"");
+  a.text('f6', 0, 33, 'Alt -13° (min 0°)');
+  a.frame(0, 41, 127, 53); a.frame(1, 42, 126, 52); a.center('f6', 43, 'BELOW HORIZON');
+  footer(a, 'click: edit');
+});
+screen('<b>GoTo refused — near Sun</b> (safety gate, needs date and time both set). <i>S9 M6</i>', a => {
+  header(a, 'GOTO', 'REFUSED');
+  a.text('f6', 0, 13, 'RA 14:52:10');
+  a.text('f6', 0, 23, "DE -14°30'00\"");
+  a.text('f6', 0, 33, 'Sun 9° away (min 15)');
+  a.frame(0, 41, 127, 53); a.frame(1, 42, 126, 52); a.center('f6', 43, 'TOO CLOSE TO SUN');
+  footer(a, 'click: edit');
+});
+
+section('Sync');
+screen('<b>Sync — confirm</b> (also reached by <code>Sync on target</code> with the last GoTo target): offset shown. <i>M5 S2</i>', a => {
+  header(a, 'SYNC', 'CONFIRM');
+  a.text('f6', 0, 13, 'RA 05:35:17');
+  a.text('f6', 0, 23, "DE -05°23'28\"");
+  a.text('f6', 0, 33, 'Move dRA+0:12 dDE-1°');
+  a.box(0, 42, 127, 52); a.center('f6', 43, 'CLICK = SYNC', true);
+  footer(a, 'hold: cancel');
+});
+screen('<b>Sync — big jump</b> (offset above about 5°): warning frame added. <i>M5</i>', a => {
+  header(a, 'SYNC', 'CONFIRM', true);
+  a.text('f6', 0, 13, "05:35:17 -05°23'28\"");
+  a.text('f6', 0, 22, 'Move dRA+3:12 dDE-8°');
+  a.frame(0, 30, 127, 41); a.center('f6', 31, 'BIG JUMP - CHECK');
+  a.box(0, 43, 127, 52); a.center('f6', 43, 'CLICK = SYNC', true);
+  footer(a, 'hold: cancel');
+});
+screen('<b>Status — SYNCED</b>: 2 s after click (double tick). HOME SET uses the same layout. <i>M5 S8</i>', a =>
+  status(a, EN, { ...trk, state: 'SYNCED' }));
+
+section('Setup, date/time, location');
+screen('<b>Setup list</b>: time is hh:mm, hemisphere letters, whole list in 19 cols. <i>S1c S10 S19</i>', a =>
+  menu(a, 'SETUP', ['Date 2026-11-10', 'Time 23:41', 'UTC  +3', "Lat  41°01' N", "Lon 028°58' E", 'Back'], 1, 0));
+screen('<b>Fast path 1/2 — Date</b>: date prefilled from last save or build date; editing month. <i>S1a S1b S3</i>', a =>
+  editor(a, 'SETUP DATE', '2/3', ['2026', '-', '11', '-', '10'], 2, 'month', 'click:next hold:back'));
+screen('<b>Fast path 2/2 — Time</b>: hh:mm only; seconds set to 00 at the click, then back to status. <i>S1a S1c</i>', a =>
+  editor(a, 'SETUP TIME', '2/2', ['23', ':', '41'], 2, 'minutes', 'click at :00 sec'));
+screen('<b>Latitude</b> — degrees; N/S letter is the last group. <i>S10 S3 S19</i>', a =>
+  editor(a, 'SETUP LAT', '1/3', ['41', '°', '01', "'", ' ', 'N'], 0, 'degrees', 'click:next hold:back'));
+screen('<b>Longitude</b> — E/W letter (last group): footer <code>click: save</code>. <i>S10 S18</i>', a =>
+  editor(a, 'SETUP LON', '3/3', ['028', '°', '58', "'", ' ', 'E'], 5, 'east / west', 'click: save'));
+screen('<b>Clears Sync</b> — confirm before a date/time/UTC/longitude change after a Sync. <i>S5</i>', a =>
+  confirmSmall(a, 'SETUP', '', 'Clears Sync. Sure?', 'click = yes'));
+
+section('Home / Park, settings, faults');
+screen('<b>Home / Park — idle</b>: no Unpark while not parked. <i>S5</i>', a =>
+  menu(a, 'HOME / PARK', ['Go home', 'Set home here', 'Park', 'Back'], 0));
+screen('<b>Home / Park — parked</b>: only Unpark (Go home, Jog hidden); header state PARKED. <i>S5 S8</i>', a =>
+  menu(a, 'HOME / PARK', ['Unpark', 'Set home here', 'Back'], 0));
+screen('<b>Set home here?</b> confirm; afterwards header <code>HOME SET</code>. <i>S8</i>', a =>
+  confirmSmall(a, 'HOME', '', 'Set home here?', 'click = yes'));
+screen('<b>Parking</b> in progress (HOMING identical): state in header, STOP footer, UI loop alive. <i>M7 M1</i>', a =>
+  status(a, EN, { ...trk, state: 'PARKING 41%', ra: '03:10:00', ha: '-02:48', dec: "+89°59'00\"", alt: '+41°', az: '000°', row4: '> park position', stop: 'click: STOP' }));
+screen('<b>Settings</b>: values right-aligned, <code>0°</code> not <code>+0°</code>, bilingual language row. <i>S16</i>', a =>
+  menu(a, 'SETTINGS', ['Dil/Lang   English', row('Min alt', '0°'), row('Beep', 'On'), 'Back'], 0));
+screen('<b>Fault</b> page (any screen, motors stopped, long beeps); the only inverted header. <i>S14</i>', a => {
+  header(a, 'FAULT', '', false, true);
+  a.frame(0, 17, 127, 49);
+  a.center('f6', 23, 'RA DRIVER FAULT'); a.center('f6', 35, 'Motors stopped');
+  footer(a, 'click: ok');
+});
+screen('<b>After unplanned reset</b>: time/date lost, GoTo/Sync locked again. <i>S14 M6</i>', a => {
+  header(a, 'WARNING', '', true);
+  a.frame(0, 17, 127, 49);
+  a.center('f6', 23, 'REBOOTED - SET TIME'); a.center('f6', 35, 'Date + time lost');
+  footer(a, 'click: set time');
+});
+
+section('Screen saver');
+screen('<b>Saver — tracking OK</b>: only entered while idle or sidereal tracking; first turn/click only wakes. <i>M3 S17</i>', a => {
+  a.center('f10', 6, '23:41');
+  a.center('f6', 31, 'TRACKING');
+  a.center('f6', 42, 'RA 05:35 DE-05°23');
+  a.center('f6', 54, 'turn to wake');
+});
+screen('<b>Saver — warning active</b>: warning replaces the RA/Dec line. <i>M3 S14 S17</i>', a => {
+  a.center('f10', 6, '--:--');
+  a.center('f6', 31, 'IDLE');
+  a.box(0, 41, 127, 51); a.center('f6', 42, 'SET DATE & TIME', true);
+  a.center('f6', 54, 'turn to wake');
+});
+
+section('Turkish (ASCII only)');
+screen('<b>Durum — TR</b>: <code>Yks</code>, header <code>TAKIPTE</code>. <i>S12 S7</i>', a => status(a, TR, { ...trk, state: 'TAKIPTE' }));
+screen('<b>Durum — TR, slewing</b>: <code>GIT %62</code>, <code>tikla: DURDUR</code> (13). <i>S12 M1</i>', a =>
+  status(a, TR, { ...trk, state: 'GIT %62', ra: '04:12:40', ha: '-01:48', dec: "+11°08'12\"", alt: '+29°', az: '141°', row4: "> 05:35:17 -05°23'", stop: 'tikla: DURDUR' }));
+screen('<b>Menu — TR</b>: <code>Motorla kaydir</code>, <code>Hedefe esitle</code>; all rows ≤ 19. <i>S12 S11 S2</i>', a =>
+  menu(a, 'MENU', ['Burayi takip et', 'Motorla kaydir', 'Git RA/Dec', 'Esitle RA/Dec', 'Hedefe esitle', 'Kurulum', 'Ev / Park', 'Ayarlar', 'Geri'], 0));
+screen('<b>Menu — TR, locked</b>: dotted rows, footer message <code>Once tarih/saat gir</code> (19). <i>S6 M6</i>', a => {
+  menu(a, 'MENU', [{ t: 'Burayi takip et', lock: true }, 'Motorla kaydir', { t: 'Git RA/Dec', lock: true }, { t: 'Esitle RA/Dec', lock: true }, 'Kurulum'], 2, 0, true);
+  a.box(0, 53, 127, 63); a.center('f6', 54, 'Once tarih/saat gir', true);
+});
+
+const lint = document.getElementById('lint');
+if (viol.length) { lint.className = 'lint bad'; lint.textContent = 'Width violations: ' + viol.join(' | '); }
+else lint.textContent = 'Width check passed for all ' + curNo + ' screens: menu rows ≤ 19, header state ≤ 12 beside clock, lines ≤ 21, editors ≤ 12, nothing past x=127.';
+</script>
+</body>
+</html>

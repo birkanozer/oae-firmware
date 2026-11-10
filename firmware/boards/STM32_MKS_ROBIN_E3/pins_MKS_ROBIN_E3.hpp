@@ -5,11 +5,12 @@
  *
  * Stepper socket mapping (OAT axis -> socket):
  *   X -> RA, Y -> DEC, Z -> ALT (free socket), E -> FOCUS (free socket)
+ *   The Z socket can carry AZ instead of ALT (AZ_STEPPER_TYPE enabled, ALT disabled).
  *
  * Each TMC2209 has its own single-wire UART (PDN) pin, driven by SoftwareSerial on TIM7
  * (-D TIMER_SERIAL=TIM7). TX and RX are the same pin; address 0 on every driver.
  *
- * Not assigned here (reserved for the screen): PB10, PB11, PC10, PB13, PA15, PB0.
+ * Ender-3 LCD header (EXP1): ST7920 over software SPI, encoder, click, buzzer (see below).
  */
 
 #pragma once
@@ -86,6 +87,29 @@
     #define AZ_DIAG_PIN PC6  // Z- endstop
 #endif
 
+// ── AZ axis: shares the Z socket with ALT, so only one of the two can be enabled ─
+#if AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && ALT_STEPPER_TYPE != STEPPER_TYPE_NONE
+    #error AZ and ALT share the Z socket on the Robin E3: enable only one of them
+#endif
+#ifndef AZ_STEP_PIN
+    #define AZ_STEP_PIN ALT_STEP_PIN
+#endif
+#ifndef AZ_DIR_PIN
+    #define AZ_DIR_PIN ALT_DIR_PIN
+#endif
+#ifndef AZ_EN_PIN
+    #define AZ_EN_PIN ALT_EN_PIN  // active LOW
+#endif
+#ifndef AZ_SERIAL_PORT_TX
+    #define AZ_SERIAL_PORT_TX ALT_SERIAL_PORT_TX
+#endif
+#ifndef AZ_SERIAL_PORT_RX
+    #define AZ_SERIAL_PORT_RX ALT_SERIAL_PORT_RX
+#endif
+#ifndef AZ_DRIVER_ADDRESS
+    #define AZ_DRIVER_ADDRESS 0b00
+#endif
+
 // ── FOCUS axis (E socket; PB3/PB4 need JTAG off, done first thing in setup()) ─
 #ifndef FOCUS_STEP_PIN
     #define FOCUS_STEP_PIN PB4
@@ -116,6 +140,39 @@
 #ifndef I2C_SDA_PIN
     #define I2C_SDA_PIN PB7
 #endif
+
+// ── Onboard LCD UI (Ender-3 header, USE_LCD_UI 1) ────────────────────────────
+#ifndef LCD_CS_PIN
+    #define LCD_CS_PIN PA5
+#endif
+#ifndef LCD_SCK_PIN
+    #define LCD_SCK_PIN PA6
+#endif
+#ifndef LCD_DATA_PIN
+    #define LCD_DATA_PIN PA4
+#endif
+#ifndef KNOB_A_PIN
+    #define KNOB_A_PIN PB11  // EXTI line 11
+#endif
+#ifndef KNOB_B_PIN
+    #define KNOB_B_PIN PB0  // EXTI line 0
+#endif
+#ifndef KNOB_CLICK_PIN
+    #define KNOB_CLICK_PIN PC3  // active low
+#endif
+#ifndef BEEPER_PIN
+    #define BEEPER_PIN PC1
+#endif
+
+// ── ULN2003 groups (28BYJ-48), moved off the LCD pins; used by slice 3 ───────
+#define ULN_A_PIN1 PB13
+#define ULN_A_PIN2 PB14
+#define ULN_A_PIN3 PB15
+#define ULN_A_PIN4 PA15
+#define ULN_B_PIN1 PA7
+#define ULN_B_PIN2 PC4
+#define ULN_B_PIN3 PC5
+#define ULN_B_PIN4 PC10
 
 // ── Serial ports ─────────────────────────────────────────────────────────────
 // Serial = USART1 on USB (SERIAL_BAUDRATE). Serial2 = USART2 PA2 TX / PA3 RX to the bridge.

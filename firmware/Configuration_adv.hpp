@@ -709,6 +709,35 @@
     #define DEBUG_LEVEL (DEBUG_NONE)
 #endif
 
+// Motor supply voltage, 12 or 24 V. At 12 V the max slew speed is scaled down and, for TMC2209 UART
+// axes, the stealthChop PWM_OFS start value is computed for the supply (PWM_OFS ~ 374 * R_coil * I_rms / V).
+#ifndef SUPPLY_VOLTAGE
+    #define SUPPLY_VOLTAGE 24
+#endif
+#ifndef SUPPLY_12V_SPEED_FACTOR
+    #define SUPPLY_12V_SPEED_FACTOR 0.7f
+#endif
+#ifndef RA_MOTOR_COIL_RESISTANCE
+    #define RA_MOTOR_COIL_RESISTANCE 1.6f  // ohms, stock NEMA17
+#endif
+#ifndef DEC_MOTOR_COIL_RESISTANCE
+    #define DEC_MOTOR_COIL_RESISTANCE 1.6f  // ohms, stock NEMA17
+#endif
+#ifndef AZ_COIL_RESISTANCE_OHM
+    #define AZ_COIL_RESISTANCE_OHM 50.0f  // ohms, bipolar-modded 28BYJ-48: both halves in series, about 2 * R_half
+#endif
+
+// Onboard 128x64 LCD + knob UI (Ender-3 header, robin_e3 only)
+#ifndef USE_LCD_UI
+    #define USE_LCD_UI 0
+#endif
+#ifndef ENCODER_COUNTS_PER_DETENT
+    #define ENCODER_COUNTS_PER_DETENT 4
+#endif
+#ifndef ENCODER_INVERT
+    #define ENCODER_INVERT 0
+#endif
+
 #ifndef DEBUG_SEPARATE_SERIAL
     #define DEBUG_SEPARATE_SERIAL 0
 #endif

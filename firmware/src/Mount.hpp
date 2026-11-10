@@ -377,6 +377,26 @@ class Mount
     // Asynchronously parks the mount. Moves to the home position and stops all motors.
     void park();
 
+    // Non-blocking park for the onboard UI: stops all motors; loop() starts the home slew once RA/DEC have stopped.
+    void startPark();
+    bool isParkPending() const;
+
+    // After stopSlewing(): drop a park / go-home so the loop does not resume the slew home or to the park position.
+    void cancelPark();
+
+    // Onboard-UI STOP: stops every motor including tracking and stays stopped. Unlike stopSlewing(), the
+    // arrival block does not restart tracking once the axes have decelerated.
+    void stopAll();
+    // Next arrival (end of a jog started from standstill) leaves tracking off. Cleared by any new slew or tracking start.
+    void suppressTrackingOnArrival();
+
+    // Boot-time TMC UART connection test: 0 ok, 1 RA driver failed, 2 DEC driver failed
+    uint8_t driverFault() const;
+
+    // Motor supply 12 or 24 V: scales the max slew speed (12 V) and sets the TMC2209 stealthChop PWM_OFS start value
+    void applySupplyVoltage(uint8_t volts);
+    uint8_t supplyVoltage() const;
+
     // Runs the RA motor at twice the speed (or stops it), or the DEC motor at tracking speed for the given duration in ms.
     void guidePulse(byte direction, int duration);
 
@@ -440,7 +460,7 @@ class Mount
     // Support for moving the mount in azimuth and altitude (requires extra hardware)
     void moveBy(int direction, float arcMinutes);
     void disableAzAltMotors();
-    void enableAzMotor();
+    bool enableAzMotor();  // false: AZ driver failed its UART test, do not move
     void enableAltMotor();
 #endif
 
@@ -505,6 +525,10 @@ class Mount
     void setLocalStartTime(DayTime localTime);
     void setLocalUtcOffset(int offset);
 
+    // Set since this boot (time is never persisted), for the onboard UI's date+time lock
+    bool isDateSet() const;
+    bool isTimeSet() const;
+
     DayTime calculateLst();
     DayTime calculateHa();
 
@@ -548,6 +572,9 @@ class Mount
 #endif
     float _stepsPerRADegree;   // u-steps/degree when slewing (see RA_STEPS_PER_DEGREE)
     float _stepsPerDECDegree;  // u-steps/degree when slewing (see DEC_STEPS_PER_DEGREE)
+    uint32_t _cfgRASpeed  = 0;  // as configured, before the supply-voltage factor
+    uint32_t _cfgDECSpeed = 0;
+    uint8_t _supplyVolts  = 24;
     uint32_t _maxRASpeed;
     uint32_t _maxDECSpeed;
     int _maxAZSpeed;
@@ -673,6 +700,7 @@ class Mount
 
     char scratchBuffer[24];
     bool _stepperWasRunning;
+    bool _suppressTrackingOnArrival;
     bool _correctForBacklash;
     bool _slewingToHome;
     bool _slewingToPark;
@@ -682,6 +710,11 @@ class Mount
     LocalDate _localStartDate;
     DayTime _localStartTime;
     long _localStartTimeSetMillis;
+    bool _dateSet      = false;
+    bool _timeSet      = false;
+    bool _parkPending  = false;
+    uint8_t _driverFault = 0;
+    bool _azDriverFailed = false;  // AZ UART did not answer: enableAzMotor() keeps EN high
 };
 
 #endif

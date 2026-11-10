@@ -23,6 +23,9 @@ POP_NO_WARNINGS
 #include "Utility.hpp"
 #include "EPROMStore.hpp"
 #include "a_inits.hpp"
+#if USE_LCD_UI == 1
+    #include "adapters/LcdUi.hpp"
+#endif
 #include "LcdMenu.hpp"
 #include "LcdButtons.hpp"
 #if (INFO_DISPLAY_TYPE == INFO_DISPLAY_TYPE_I2C_SSD1306_128x64)
@@ -712,7 +715,13 @@ void setup()
     mount.startSlewing(TRACKING);
 #endif
 
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    mount.applySupplyVoltage(SUPPLY_VOLTAGE);
+#endif
     mount.bootComplete();
+#if USE_LCD_UI == 1
+    lcdUiSetup();
+#endif
     LOG(DEBUG_ANY, "[SYSTEM]: Boot complete!");
     addConsoleText(F("BOOT COMPLETE!"));
 #if (INFO_DISPLAY_TYPE != INFO_DISPLAY_TYPE_NONE)

@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.2.0] - 2026-11-10
+
+### Added
+
+- LCD safety behaviour: STOP from the screen stops all motion including tracking and leaves the mount idle (no tracker-off catch-up move); a driver fault locks GoTo, Jog, Sync and Home/Park moves (only "Stop tracking" stays live) and names the failing axis (RA, DEC or DRIVER); GO re-checks min altitude, Sun distance and input at the click; Sync confirms are armed after 600 ms like GO; Unpark needs date and time; UI "Go home" shows HOMING and ends idle. A failed AZ driver refuses every AZ move without changing its position, and AZ on TMC2209 UART requires `UART_CONNECTION_TEST_TXRX`.
+
+- AZ axis on the Robin E3 Z socket for a bipolar-modded 5 V 28BYJ-48 on a TMC2209 in UART mode (peak 150 mA, 91 mA RMS actual, 2048 SPR at 16 microsteps, hold 30 %, released when idle): `AZ_*` pins, `AZ_COIL_RESISTANCE_OHM` for the 12/24 V PWM_OFS, and AZ stays disabled when its UART does not answer (`enableAzMotor()` no longer re-enables it on VREF current); ULN2003 stays selectable.
+- LCD screens: GoTo (RA/Dec editors prefilled with the last target, Alt/Az/Sun confirm armed after 600 ms, refused below min altitude, near the Sun or on invalid input), Sync and Sync on target (offset, BIG JUMP frame above 5 deg, SYNCED), Setup (date then time fast path, hh:mm at :00, UTC offset, latitude/longitude with N/S E/W letters, "Clears Sync. Sure?" before date/time/UTC/longitude changes after a Sync), Jog (submenu, 300 ms auto-stop, stale turns dropped, SLOW/CENTER/FIND/MAX rates), Home/Park (Unpark only when parked, Set home confirm, PARKING/HOMING with STOP), Settings from a row table (language, min altitude, beep, 12/24 V supply), Turkish throughout and a width lint over every screen in both languages; host-tested.
+- Onboard LCD and knob on the Robin E3 (`USE_LCD_UI`): U8g2 ST7920 canvas, EXTI encoder with click, long press and queued buzzer, `UiMountAdapter` mapping UI actions to Mount calls, non-blocking `Mount::startPark()`, `isDateSet()`/`isTimeSet()`, boot UART-test fault code, `SUPPLY_VOLTAGE` 12/24 V (`Mount::applySupplyVoltage`: 12 V speed factor and TMC2209 PWM_OFS), `TIMER_TONE=TIM4`.
+- `core::UiController` for the 128x64 LCD: status screen with alert bar and transient headers, main menu with a fixed row-0 motion slot, locked rows until date and time are set, STOP on any click or long press while the mount moves, 500 ms click ignore after the motion slot changes, fault and reboot pages, screen saver; host-tested.
+- `core::Canvas` drawing interface with font metrics (128x64 LCD), and `core::FieldEditor` extensions: back (previous group), hh:mm kind, hemisphere letters for latitude/longitude. The DWIN frame encoder is removed.
+- EN/TR UI text table `core::uiText` (ASCII, no diacritics) and `core::FieldEditor` for time, RA, Dec, latitude, longitude, date and integer fields with range clamping, host-tested.
+- `core::SkyMath`: alt/az conversion, low-precision Sun position, angular separation and `checkTarget` (refuses targets below the minimum altitude or within 15 deg of the Sun), host-tested.
+
+### Fixed
+
+- docs/wiring.md: Ender-3 EXP1 header pin map for the screen cable (encoder on pins 3 and 5), EXP1 pins 1 and 2 swap, EXP2 positions of PB13/PB14/PB15, EXTI lines 0 and 11 reserved by the knob; architecture diagram and bench checklist (time `canvas.flush()`) updated.
 
 ## [v0.1.1] - 2026-11-10
 

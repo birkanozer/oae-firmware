@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OAE 12864 Mockups</title>
+<style>
+  body { margin: 0; padding: 24px; background: #2b2b2b; color: #ddd; font: 14px system-ui, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  p.note { margin: 0 0 20px; color: #aaa; max-width: 1640px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 532px); gap: 26px; }
+  figure { margin: 0; }
+  .bezel { background: #111; padding: 10px; border-radius: 6px; width: 512px; }
+  canvas { display: block; image-rendering: pixelated; width: 512px; height: 256px; }
+  figcaption { margin-top: 6px; color: #ccc; }
+  figcaption b { color: #fff; }
+</style>
+</head>
+<body>
+<h1>OAE Robin E3 — Ender 3 stock LCD (ENH12864Z-1, ST7920, 128×64) mockups, shown ×4</h1>
+<p class="note">Each screen is a real 128×64 one-bit bitmap: layout, cell sizes and inversions are exact for the U8g2 fonts named in the captions (5×7, 6×10, 7×13 bold, 10×20). Glyph shapes are approximated by thresholding a system monospace font. Light pixels on the blue backlight as on the real panel. Knob: turn = move, click = select, hold = back.</p>
+<div class="grid" id="grid"></div>
+<script>
+const W = 128, H = 64, S = 4;
+const FONTS = { f5: [5, 7, 8], f6: [6, 10, 10], f7: [7, 13, 13], f10: [10, 20, 20] }; // [cellW, cellH, drawPx]
+const LCD_BG = [30, 70, 210], LCD_ON = [225, 238, 255], LCD_OFF_TINT = [36, 80, 220];
+
+function screen(caption, draw) {
+  const fig = document.createElement('figure');
+  const bez = document.createElement('div'); bez.className = 'bezel';
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  bez.appendChild(c); fig.appendChild(bez);
+  const px = new Uint8Array(W * H); // 1 = lit
+  const set = (x, y, v = 1) => { if (x >= 0 && y >= 0 && x < W && y < H) px[y * W + x] = v; };
+  // glyph rasteriser: draw one char into a cell via an offscreen canvas, threshold to 1 bit
+  const off = document.createElement('canvas'); off.width = 32; off.height = 32;
+  const og = off.getContext('2d', { willReadFrequently: true });
+  function glyph(ch, font, x, y, inv) {
+    const [cw, chh, size] = FONTS[font];
+    if (ch === '°') { // small 3x3 ring
+      for (const [dx, dy] of [[1,0],[0,1],[2,1],[1,2]]) set(x + dx + 1, y + dy + 1, inv ? 0 : 1);
+      return;
+    }
+    og.clearRect(0, 0, 32, 32);
+    og.fillStyle = '#000';
+    og.font = `${font === 'f7' || font === 'f10' ? 'bold ' : ''}${size}px Consolas, "Courier New", monospace`;
+    og.textBaseline = 'top';
+    const mw = og.measureText(ch).width;
+    og.fillText(ch, Math.round((cw - mw) / 2), font === 'f5' ? -1 : 0);
+    const d = og.getImageData(0, 0, cw, chh).data;
+    for (let yy = 0; yy < chh; yy++) for (let xx = 0; xx < cw; xx++) {
+      const a = d[(yy * cw + xx) * 4 + 3];
+      if (a > 110) set(x + xx, y + yy, inv ? 0 : 1);
+    }
+  }
+  const api = {
+    text(font, x, y, s, inv = false) { const cw = FONTS[font][0]; [...s].forEach((ch, i) => glyph(ch, font, x + i * cw, y, inv)); return cw * [...s].length; },
+    right(font, xr, y, s, inv) { return api.text(font, xr - FONTS[font][0] * [...s].length, y, s, inv); },
+    center(font, y, s, inv) { return api.text(font, Math.round((W - FONTS[font][0] * [...s].length) / 2), y, s, inv); },
+    box(x0, y0, x1, y1) { for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) set(x, y, 1); },
+    frame(x0, y0, x1, y1) { for (let x = x0; x <= x1; x++) { set(x, y0); set(x, y1); } for (let y = y0; y <= y1; y++) { set(x0, y); set(x1, y); } },
+    hline(x0, x1, y) { for (let x = x0; x <= x1; x++) set(x, y); },
+    dots(x0, x1, y) { for (let x = x0; x <= x1; x += 2) set(x, y); },
+  };
+  draw(api);
+  const g = c.getContext('2d'); const img = g.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) { const col = px[i] ? LCD_ON : ((i % W + Math.floor(i / W)) % 2 ? LCD_BG : LCD_OFF_TINT); img.data.set([...col, 255], i * 4); }
+  g.putImageData(img, 0, 0);
+  const cap = document.createElement('figcaption'); cap.innerHTML = caption; fig.appendChild(cap);
+  document.getElementById('grid').appendChild(fig);
+}
+
+// ---- shared layout ----
+function header(a, left, right) { a.box(0, 0, 127, 10); a.text('f6', 1, 1, left, true); if (right) a.right('f6', 127, 1, right, true); }
+function footer(a, s) { a.dots(0, 127, 53); a.center('f6', 54, s); }
+function status(a, L, d) {
+  header(a, d.state, d.time);
+  a.text('f6', 0, 12, 'RA ' + d.ra);
+  a.text('f6', 0, 22, L.de + ' ' + d.dec);
+  a.text('f6', 0, 32, L.al + d.alt + ' ' + L.az + d.az);
+  a.text('f6', 0, 42, 'LST ' + d.lst);
+  if (d.warn) { a.box(0, 53, 127, 63); a.center('f6', 54, d.warn, true); }
+  else footer(a, d.foot || L.foot);
+}
+function menu(a, title, page, items, sel, top = 0) {
+  header(a, title, page);
+  items.slice(top, top + 5).forEach((it, i) => {
+    const y = 13 + i * 10, idx = top + i;
+    if (idx === sel) { a.box(0, y - 1, 121, y + 8); a.text('f6', 2, y, it, true); }
+    else a.text('f6', 2, y, it);
+  });
+  // scrollbar
+  const n = items.length; if (n > 5) { a.frame(124, 12, 127, 63); const h = Math.max(6, Math.round(52 * 5 / n)); const y0 = 12 + Math.round((52 - h) * top / (n - 5)); a.box(125, y0, 126, y0 + h - 1); }
+}
+function editor(a, title, step, groups, sel, sub, foot) {
+  header(a, title, step);
+  const s = groups.join(''), cw = 10, x0 = Math.round((W - cw * [...s].length) / 2), y = 14;
+  let off = 0;
+  groups.forEach((gr, i) => {
+    const sep = /^[:\-°'"]+$/.test(gr);
+    if (i === sel && !sep) { a.box(x0 + off * cw - 1, y - 1, x0 + (off + [...gr].length) * cw, y + 20); a.text('f10', x0 + off * cw, y, gr, true); }
+    else a.text('f10', x0 + off * cw, y, gr);
+    off += [...gr].length;
+  });
+  a.center('f6', 38, sub);
+  footer(a, foot);
+}
+
+const EN = { de: 'DE', al: 'Alt', az: 'Az', foot: 'click: menu' };
+const TR = { de: 'DE', al: 'Yuk', az: 'Az', foot: 'tikla: menu' };
+const trk = { state: 'TRACKING', time: '23:41:07', ra: '05:35:17', dec: "-05°23'28\"", alt: '+38', az: '161', lst: '04:58:02' };
+
+screen('<b>1. Status</b> — after boot; date/time not set, GoTo / Sync / Track here locked (font 6×10, header 5×7)', a =>
+  status(a, EN, { state: 'IDLE', time: '--:--:--', ra: '--:--:--', dec: "+90°00'00\"", alt: ' --', az: ' --', lst: '--:--:--', warn: 'SET DATE & TIME' }));
+screen('<b>2. Status</b> — tracking', a => status(a, EN, trk));
+screen('<b>3. Status</b> — slewing to target, progress bar', a => {
+  status(a, EN, { ...trk, state: 'GOTO 62%', ra: '04:12:40', dec: "+11°08'12\"", alt: '+29', az: '141', foot: ' ' });
+  a.frame(0, 53, 127, 63); a.box(2, 55, 2 + Math.round(123 * 0.62), 61);
+});
+screen('<b>4. Menu</b> — idle (5 rows visible, scrollbar)', a =>
+  menu(a, 'MENU', '1/8', ['Track here', 'Jog', 'GoTo RA/Dec', 'Sync RA/Dec', 'Setup', 'Home / Park', 'Settings', 'Back'], 0));
+screen('<b>5. Menu</b> — while moving: STOP is always first', a =>
+  menu(a, 'MENU', '1/9', ['STOP', 'Stop tracking', 'Jog', 'GoTo RA/Dec', 'Sync RA/Dec', 'Setup', 'Home / Park', 'Settings', 'Back'], 0));
+screen('<b>6. Jog</b> — RA selected, speed 2 of 4; stops 0.3 s after the knob stops (7×13 bold)', a => {
+  header(a, 'JOG', 'SPEED 2/4');
+  a.box(0, 13, 61, 28); a.text('f7', 21, 14, 'RA', true);
+  a.frame(66, 13, 127, 28); a.text('f7', 86, 14, 'DEC');
+  a.text('f6', 0, 31, 'RA ' + '05:35:21');
+  a.text('f6', 0, 41, "DE -05°23'28\"");
+  footer(a, 'click: speed');
+});
+screen('<b>7. GoTo — RA</b> — editing minutes (10×20 digits)', a => editor(a, 'GOTO  RA', '1/2', ['05', ':', '35', ':', '17'], 2, 'minutes', 'click: next'));
+screen('<b>8. GoTo — Dec</b> — editing the sign', a => editor(a, 'GOTO  DEC', '2/2', ['-', '05', '°', '23', "'", '28'], 0, 'sign +/-', 'click: next'));
+screen('<b>9. GoTo — confirm</b> — target checked, click to slew', a => {
+  header(a, 'GOTO', 'CONFIRM');
+  a.text('f6', 0, 12, 'RA 05:35:17');
+  a.text('f6', 0, 22, "DE -05°23'28\"");
+  a.text('f6', 0, 32, 'Alt +38  Sun 112°');
+  a.box(0, 42, 127, 52); a.center('f6', 43, 'CLICK = GO', true);
+  footer(a, 'hold: cancel');
+});
+screen('<b>10. GoTo — refused</b> — below the horizon (double beep)', a => {
+  header(a, 'GOTO', 'REFUSED');
+  a.text('f6', 0, 12, 'RA 18:36:56');
+  a.text('f6', 0, 22, "DE +38°47'01\"");
+  a.text('f6', 0, 32, 'Alt -13  min +0°');
+  a.frame(0, 41, 127, 53); a.frame(1, 42, 126, 52); a.center('f6', 43, 'BELOW HORIZON');
+  footer(a, 'click: back');
+});
+screen('<b>11. Setup</b> — set date &amp; time before Sync / GoTo', a =>
+  menu(a, 'SETUP', '2/6', ['Date 2026-11-10', 'Time 23:41:07', 'UTC  +3', "Lat  +41°01'", "Lon +028°58'", 'Back'], 1));
+screen('<b>12. Setup — Date</b> — editing the day', a => editor(a, 'SETUP DATE', '', ['2026', '-', '11', '-', '10'], 4, 'day', 'click: ok'));
+screen('<b>13. Home / Park</b>', a => menu(a, 'HOME / PARK', '1/5', ['Go home', 'Set home here', 'Park', 'Unpark', 'Back'], 0));
+screen('<b>14. Settings</b> — held in RAM until slice 3 adds storage', a =>
+  menu(a, 'SETTINGS', '1/4', ['Lang   English', 'Min alt  +0°', 'Beep   On', 'Back'], 0));
+screen('<b>15. Status — Turkish</b> (no special letters)', a => status(a, TR, { ...trk, state: 'TAKIPTE' }));
+screen('<b>16. Menu — Turkish</b>', a =>
+  menu(a, 'MENU', '3/8', ['Burayi takip et', 'Elle hareket', 'Git RA/Dec', 'Esitle RA/Dec', 'Kurulum', 'Ev / Park', 'Ayarlar', 'Geri'], 2, 0));
+screen('<b>17. Setup — Latitude</b> — editing degrees (seconds not used)', a => editor(a, 'SETUP LAT', '', ['+', '41', '°', '01', "'"], 1, 'degrees', 'click: next'));
+screen('<b>18. Screen saver</b> — after 2 min idle: minimal big clock + state (no burn-in, readable from a distance)', a => {
+  a.center('f10', 8, '23:41');
+  a.center('f6', 34, 'TRACKING');
+  a.center('f6', 50, 'RA 05:35 DE-05°23');
+});
+</script>
+</body>
+</html>

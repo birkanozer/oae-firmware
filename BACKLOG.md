@@ -6,6 +6,16 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Next
 
+- **Slice 2 bench test (needs the LCD on the Ender-3 header).** Stock 12864 LCD on "Ender-3 EXP1"
+  (docs/wiring.md), PSU off while plugging in, then:
+  1. Boot: status screen appears. If blank or garbled, check the cable key and try a slower U8g2
+     SPI bus delay (the ST7920 at 3.3 V logic is the known risk).
+  2. Knob: one detent = one step in the right direction (else `ENCODER_INVERT` or counts per detent).
+  3. Buzzer beeps on click.
+  4. Fast path: click the alert, set date and time, GoTo unlocks.
+  5. Jog RA and DEC; let go and it stops within ~0.3 s; click while moving anywhere = STOP.
+  6. GoTo a star, confirm, ARRIVED then TRACKING; Sync on target.
+  7. Park, PARKING screen, click, STOP works mid-park.
 - **Slice 1 bench test (needs PSU).** Board on a 12/24 V PSU, then:
   - Re-probe over SWD with the PSU on: target voltage ≈ 3.3 V; dump flash again, compare SHA-256
     with `backup/robin_e3_factory_full.bin`.
@@ -17,6 +27,7 @@ file. Slices and their order: `docs/architecture.md` §8.
     (`UART_CONNECTION_TEST_TXRX 1` in the example config), not run on VREF current.
   - **Release build** (the default `robin_e3`; no debug output, LX200 replies on USB):
     - USB serial at 19200 answers `:GVP#` and `:GVN#`; `:SY` sync (21 chars) gets a `1`/`0` reply.
+      Blocked while USB transmit is dead (see Debate); the USART2 check below covers it meanwhile.
     - Manual slew moves RA and DEC both ways; `:Q#` stops. Watch for missed or garbled driver
       writes when a slew starts with Serial2 traffic flowing.
     - `:XSR…#` then power-cycle; `:XGR#` returns the new value.
@@ -35,9 +46,9 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Later
 
-- Slice 2 `dwin-ui` (Ender 3 V2 screen: driver from the DWIN T5UIC1 guide, status, setup wizard,
-  jog, Track here / GoTo RA/Dec / Sync). Needs the adapter cable (docs/wiring.md).
 - Slice 3 `runtime-config` (settings struct, `:XC` commands, ULN2003 driver type).
+- Persist screen settings (slice 3 settings table): language, minimum altitude, beep, supply.
+  RAM-only until then.
 - Slice 4 `homing` (microswitch homing, startup sequence).
 - Slice 5 `esp32-bridge` (BLE + hotspot HTTPS/WSS). Pair with BLE bonding/whitelist: the LX200 parser is a trust boundary.
 - Slice 6 `pwa`, slice 7 `planes`, slice 8 `stellarium`.

@@ -25,6 +25,9 @@ void processSerialData(Stream &port, SerialBuffer &buf);
 void serialLoop()
 {
     mount.loop();
+    #if USE_LCD_UI == 1
+    lcdUiUpdate();
+    #endif
     mount.displayStepperPositionThrottled();
 
     #if defined(ESP32) || defined(ARDUINO_ARCH_STM32)

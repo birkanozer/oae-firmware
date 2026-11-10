@@ -62,3 +62,9 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
 - 2026-11-10 Planes from free ADS-B (adsb.lol / airplanes.live), not Flightradar24.
 - 2026-11-10 All motor/gear/driver settings editable from the phone and stored on the board,
   stock OAE values as defaults.
+- 2026-11-10 One settings table in the firmware (id, EN/TR name, type, range, unit, default, group)
+  is the single source: the onboard screen's Settings menu and the phone app's settings page are
+  both generated from it (the app reads it over LX200), so the two always match.
+- 2026-11-10 Onboard screen is the stock Ender 3 LCD (ENH12864Z-1, ST7920 128×64 mono, knob,
+  buzzer) on the board's dedicated "Ender-3 EXP1" header, drawn with U8g2 (BSD-2). Supersedes the
+  Ender 3 V2 DWIN plan.

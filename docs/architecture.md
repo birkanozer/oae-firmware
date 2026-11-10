@@ -35,11 +35,11 @@ them), plate solving, autoguiding, a native iOS/Android app.
    over HTTPS, WSS link)          WSS byte pipe; LX200 TCP          ├ TMC2209 Z  → free (ALT / AZ bipolar)
  Phone does: catalog,             :4030 for Stellarium              ├ TMC2209 E  → free (focus bipolar)
  ephemerides, RA/Dec↔Az/Alt,                                        │
- GPS + time, plane fetch,                                           ├ ULN2003 A (EXP1) → AZ 28BYJ-48
- settings UI (EN/TR)                                                ├ ULN2003 B (EXP1) → focus 28BYJ-48
+ GPS + time, plane fetch,                                           ├ ULN2003 A (PB13/PB14/PB15/PA15) → AZ 28BYJ-48
+ settings UI (EN/TR)                                                ├ ULN2003 B (PA7/PC4/PC5/PC10) → focus 28BYJ-48
                                                                     ├ endstops X-/Y-/Z-/Z+ (microswitch)
-                                                                    ├ Ender 3 V2 screen (DWIN, USART3
-                                                                    │   PB10/PB11 + knob on EXP2)
+                                                                    ├ stock Ender 3 LCD (ST7920, knob, buzzer)
+                                                                    │   on the "Ender-3 EXP1" header
                                                                     ├ AT24C32 I²C EEPROM (settings)
                                                                     └ USB (CH340, USART1) → LX200 / debug
 ```
@@ -75,34 +75,40 @@ Upgrade work (later slices):
   run current, hold %, direction invert, max speed, acceleration, backlash; plus limits, home
   offsets, site, tracking calibration. Exposed through new `:XC…#` get/set commands. Changing a
   driver slot takes effect after reboot.
+- **One settings table, two UIs.** Every setting is a row in one firmware table (id, EN/TR
+  name, group, type, min/max/step, unit, default). The onboard screen's Settings menu is
+  generated from it, and the phone app downloads the same table (`:XC` list command) and
+  generates its settings page from it — the two always show the same settings, names, ranges
+  and grouping. Screen-only conveniences (language, beep) are rows too.
 - **ULN2003 driver type** (AccelStepper `HALF4WIRE`) alongside TMC2209, selectable per axis.
 - **Microswitch homing** for RA, DEC (and AZ). OAT's hall-sensor routine finds both edges of a
   sensor zone and homes to the midpoint — a microswitch pressed by a printed cam of known width
   gives the same two edges, so the routine is reused, with debounce tuned for contacts.
 
-## 3a. Onboard screen (Ender 3 V2 DWIN)
+## 3a. Onboard screen (stock Ender 3 LCD)
 
-Lets the mount be set up and run with no phone, and is the first UI to exist (before the
-bridge). Creality Ender 3 V2 display: DWIN T5UIC1 serial LCD, 480×272, rotary knob + click,
-beeper. Frames `AA <cmd> <data> CC 33 C3 3C`, 115200 baud, RGB565, drawing commands (clear,
-text, rectangle, stock icon library, backlight). The driver is written **from the DWIN T5UIC1
-developer guide only** — Marlin's and other community DWIN code is GPL and is not copied.
+Lets the mount be set up and run with no phone. The stock Ender 3 display (ENH12864Z-1): ST7920
+128×64 monochrome, rotary knob with click, buzzer. It plugs into the board's "Ender-3 EXP1"
+header ([wiring.md](wiring.md)). Drawn with **U8g2** (BSD-2-Clause) over software SPI. Steppers
+run in the timer ISR, so redraws never stall motion.
 
-A **new graphical UI** for the knob, not OAT's 16×2 menus (OAT's `DISPLAY_TYPE` stays NONE; the
-screen is its own module calling the mount API):
+A **graphical UI** for the knob, not OAT's 16×2 menus (OAT's `DISPLAY_TYPE` stays NONE). Pure
+logic lives in `src/core/ui/` (host-tested); the STM32 glue is in `src/adapters/`.
 
-- **Status** (home screen): RA/Dec, Alt/Az, tracking on/off, LST, time, site, link state.
-- **Setup wizard** (first boot and from the menu): date/time, UTC offset, latitude/longitude
-  (knob entry; later prefilled when a phone sends them), home the axes.
-- **Jog**: pick axis, knob turns move it, click cycles speed; "Stop" always one click away.
-- **Point & track**: *Track here* — start sidereal tracking wherever the mount points (manual
-  aim, no coordinates needed); *GoTo RA/Dec* — enter coordinates, slew, then track; *Sync here*
-  — tell the mount the entered RA/Dec is where it points.
-- **Settings** (subset of §3 runtime config once it exists): motor currents, limits, Sun
-  avoidance off/on, screen brightness.
+- **Status** (home): state and clock, RA, Dec, HA, Alt/Az, LST and UTC.
+- **Track here, GoTo, Sync**: track wherever the mount points; GoTo RA/Dec with a minimum-altitude
+  and Sun-distance check before the slew; Sync to the entered coordinates.
+- **Jog, Home, Park**: jog RA or Dec with the knob. Home and park are started and polled, so the
+  UI never blocks.
+- **Settings**: language, minimum altitude, beep, supply voltage (12/24 V). RAM-only until the
+  slice 3 settings table persists them.
+- **Safety**: any click stops motion; GoTo, Sync and Track need date and time set since boot; a
+  driver fault shows a fault page with motors stopped.
 
-The screen and the phone can be connected at once; the firmware stays the single authority, and
-the screen redraws from mount state, so either side's command shows up on both.
+The full layout and interaction rules, with the bench checklist, are in
+`plans/dwin-ui/2026-11-10-lcd-ui-design.md`. The screen and the phone can be connected at once;
+the firmware stays the single authority, and the screen redraws from mount state, so either side's
+command shows up on both.
 
 ## 4. Mechanical limits and safety
 

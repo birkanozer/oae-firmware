@@ -99,6 +99,7 @@ void Mount::initializeVariables()
     _mountStatus       = 0;
     _lastDisplayUpdate = 0;
     _stepperWasRunning = false;
+    _suppressTrackingOnArrival = false;
     _latitude          = Latitude(inNorthernHemisphere ? 45.0f : -45.0f);
     _longitude         = Longitude(100.0);
     _zeroPosDEC        = 0.0f;
@@ -310,6 +311,7 @@ void Mount::configureRAStepper(byte pin1, byte pin2, uint32_t maxSpeed, uint32_t
     _stepperRA->setMaxSpeed(maxSpeed);
     _stepperRA->setAcceleration(maxAcceleration);
     _maxRASpeed        = maxSpeed;
+    _cfgRASpeed        = maxSpeed;
     _maxRAAcceleration = maxAcceleration;
 
     _stepperTRK->setMaxSpeed(5000);
@@ -337,6 +339,7 @@ void Mount::configureDECStepper(byte pin1, byte pin2, uint32_t maxSpeed, uint32_
     _stepperDEC->setMaxSpeed(maxSpeed);
     _stepperDEC->setAcceleration(maxAcceleration);
     _maxDECSpeed        = maxSpeed;
+    _cfgDECSpeed        = maxSpeed;
     _maxDECAcceleration = maxAcceleration;
 
     _stepperGUIDE->setMaxSpeed(maxSpeed);
@@ -461,6 +464,14 @@ bool Mount::connectToDriver(const String &driverKind, uint16_t *rmsCurrent)
             }
         }
         LOG(DEBUG_STEPPERS, "[STEPPERS]: UART connection to %s driver failed.", driverKind.c_str());
+        if (_driverFault == 0)
+        {
+            _driverFault = driverKind == "RA" ? 1 : (driverKind == "DEC" ? 2 : 3);
+        }
+        if (driverKind == "AZ")
+        {
+            _azDriverFailed = true;
+        }
     }
     if (rmsCurrent != nullptr)
     {
@@ -1531,6 +1542,7 @@ void Mount::syncPosition(DayTime ra, Declination dec)
 // there. Must call loop() frequently to actually move.
 void Mount::startSlewingToTarget()
 {
+    _suppressTrackingOnArrival = false;
     stopGuiding();
 
     // Make sure we're slewing at full speed on a GoTo
@@ -1587,6 +1599,7 @@ void Mount::startSlewingToTarget()
 // Takes any sync operations that have happened and tracking into account.
 void Mount::startSlewingToHome()
 {
+    _suppressTrackingOnArrival = false;
     stopGuiding();
 
     // Make sure we're slewing at full speed on a GoTo
@@ -1998,8 +2011,10 @@ void Mount::getAZALTPositions(long &azPos, long &altPos)
 void Mount::moveAZALTToHome()
 {
 #if (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE)
-    enableAzMotor();
-    _stepperAZ->moveTo(0);
+    if (enableAzMotor())
+    {
+        _stepperAZ->moveTo(0);
+    }
 #endif
 #if (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
     enableAltMotor();
@@ -2033,6 +2048,86 @@ void Mount::park()
     waitUntilStopped(ALL_DIRECTIONS);
     startSlewingToHome();
     setStatusFlag(STATUS_PARKING);
+}
+
+/////////////////////////////////
+//
+// startPark
+//
+// Same as park() without blocking: loop() starts the slew home once RA and DEC have stopped.
+/////////////////////////////////
+void Mount::startPark()
+{
+    stopGuiding();
+    stopSlewing(ALL_DIRECTIONS | TRACKING);
+    _parkPending = true;  // after stopSlewing(), which cancels it
+}
+
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3                                                                                                      \
+    && (RA_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART || DEC_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART                                          \
+        || (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART))
+static uint8_t pwmOfsFor(float coilOhm, float rmsMilliAmp, uint8_t volts)
+{
+    const float ofs = 374.0f * coilOhm * (rmsMilliAmp / 1000.0f) / volts;
+    return ofs < 0.0f ? 0 : (ofs > 255.0f ? 255 : static_cast<uint8_t>(ofs + 0.5f));
+}
+#endif
+
+void Mount::applySupplyVoltage(uint8_t volts)
+{
+    _supplyVolts = volts == 12 ? 12 : 24;
+    // Slews re-apply _max*Speed when they start
+    const float factor = _supplyVolts == 12 ? SUPPLY_12V_SPEED_FACTOR : 1.0f;
+    _maxRASpeed        = static_cast<uint32_t>(_cfgRASpeed * factor);
+    _maxDECSpeed       = static_cast<uint32_t>(_cfgDECSpeed * factor);
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && RA_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
+    _driverRA->pwm_ofs(pwmOfsFor(RA_MOTOR_COIL_RESISTANCE, (RA_RMSCURRENT), _supplyVolts));
+    _driverRA->pwm_autoscale(true);
+#endif
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && DEC_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
+    _driverDEC->pwm_ofs(pwmOfsFor(DEC_MOTOR_COIL_RESISTANCE, (DEC_RMSCURRENT), _supplyVolts));
+    _driverDEC->pwm_autoscale(true);
+#endif
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
+    _driverAZ->pwm_ofs(pwmOfsFor(AZ_COIL_RESISTANCE_OHM, (AZ_RMSCURRENT), _supplyVolts));
+    _driverAZ->pwm_autoscale(true);
+#endif
+}
+
+uint8_t Mount::supplyVoltage() const
+{
+    return _supplyVolts;
+}
+
+void Mount::stopAll()
+{
+    stopSlewing(ALL_DIRECTIONS | TRACKING);
+    cancelPark();
+    _compensateForTrackerOff = false;  // no catch-up move after STOP (it would move RA and block loop())
+    // Only when a decelerating axis will still trigger the arrival block (it would restart tracking)
+    _suppressTrackingOnArrival = _stepperWasRunning || _stepperRA->isRunning() || _stepperDEC->isRunning();
+}
+
+void Mount::suppressTrackingOnArrival()
+{
+    _suppressTrackingOnArrival = true;
+}
+
+void Mount::cancelPark()
+{
+    clearStatusFlag(STATUS_PARKING | STATUS_PARKING_POS);
+    _slewingToHome = false;
+    _slewingToPark = false;
+}
+
+bool Mount::isParkPending() const
+{
+    return _parkPending;
+}
+
+uint8_t Mount::driverFault() const
+{
+    return _driverFault;
 }
 
 bool Mount::isAxisRunning(StepperAxis axis)
@@ -2097,9 +2192,11 @@ void Mount::moveBy(int direction, float arcMinutes)
     #if (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE)
     if (direction == AZIMUTH_STEPS)
     {
-        enableAzMotor();
-        long stepsToMove = arcMinutes * AZIMUTH_STEPS_PER_ARC_MINUTE;
-        _stepperAZ->move(stepsToMove);
+        if (enableAzMotor())
+        {
+            long stepsToMove = arcMinutes * AZIMUTH_STEPS_PER_ARC_MINUTE;
+            _stepperAZ->move(stepsToMove);
+        }
     }
     #endif
     #if (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
@@ -2158,14 +2255,19 @@ void Mount::disableAzAltMotors()
 // enableAzAltMotors
 //
 /////////////////////////////////
-void Mount::enableAzMotor()
+bool Mount::enableAzMotor()
 {
     #if (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE)
+    if (_azDriverFailed)
+    {
+        return false;  // UART did not answer at boot: never run on the board's VREF current, and do not step virtually
+    }
     digitalWrite(AZ_EN_PIN, LOW);  // Logic LOW to enable driver
     // Let loop() disable the driver again, even if the move turns out to be zero steps
     // (e.g. move to home while already at home), so it never stays powered.
     _azAltWasRunning = true;
     #endif
+    return true;
 }
 
 void Mount::enableAltMotor()
@@ -2580,6 +2682,7 @@ void Mount::startSlewing(int direction)
 {
     if (!isParking())
     {
+        _suppressTrackingOnArrival = false;
         stopGuiding();
 
         if (direction & TRACKING)
@@ -2695,6 +2798,7 @@ void Mount::startSlewing(int direction)
 /////////////////////////////////
 void Mount::stopSlewing(int direction)
 {
+    _parkPending = false;
     if (direction & TRACKING)
     {
         // Turn off tracking
@@ -3115,6 +3219,13 @@ void Mount::loop()
 
     unsigned long now = millis();
 
+    if (_parkPending && !_stepperRA->isRunning() && !_stepperDEC->isRunning())
+    {
+        _parkPending = false;
+        startSlewingToHome();
+        setStatusFlag(STATUS_PARKING);
+    }
+
 #if (DEBUG_LEVEL & DEBUG_MOUNT) && (DEBUG_LEVEL & DEBUG_VERBOSE)
     if (now - _lastMountPrint > 2000)
     {
@@ -3281,7 +3392,11 @@ void Mount::loop()
                     _compensateForTrackerOff = false;
                 }
 
-                if (!isFindingHome())  // If we're homing, RA must stay in Slew configuration
+                if (_suppressTrackingOnArrival)
+                {
+                    _suppressTrackingOnArrival = false;  // STOP or a jog from standstill: stay idle
+                }
+                else if (!isFindingHome())  // If we're homing, RA must stay in Slew configuration
                 {
                     LOG(DEBUG_STEPPERS, "[STEPPERS]: Loop: Not finding home, so start tracking");
                     startSlewing(TRACKING);
@@ -3873,7 +3988,8 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
             _driverRA->microsteps(RA_SLEW_MICROSTEPPING == 1 ? 0 : RA_SLEW_MICROSTEPPING);
 #endif
             setStatusFlag(STATUS_SLEWING | STATUS_SLEWING_TO_TARGET);
-            _stepperWasRunning = true;
+            _suppressTrackingOnArrival = false;
+            _stepperWasRunning         = true;
             moveSteppersTo(_stepperRA->currentPosition() + steps, 0, direction);
             _totalRAMove = 1.0f * _stepperRA->distanceToGo();
             break;
@@ -3881,6 +3997,7 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
         case DEC_STEPS:
             {
                 setStatusFlag(STATUS_SLEWING | STATUS_SLEWING_TO_TARGET);
+                _suppressTrackingOnArrival = false;
 #if DEC_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
                 // Since normal state for DEC is guide microstepping, switch to slew microstepping here.
                 LOG(DEBUG_STEPPERS, "[STEPPERS]: moveStepperBy: Switching DEC driver to microsteps(%d)", DEC_SLEW_MICROSTEPPING);
@@ -3903,12 +4020,14 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
         case AZIMUTH_STEPS:
             {
 #if AZ_STEPPER_TYPE != STEPPER_TYPE_NONE
-                enableAzMotor();
-                LOG(DEBUG_STEPPERS,
-                    "[STEPPERS]: moveStepperBy: AZ from %l to %l",
-                    _stepperAZ->currentPosition(),
-                    _stepperAZ->currentPosition() + steps);
-                _stepperAZ->moveTo(_stepperAZ->currentPosition() + steps);
+                if (enableAzMotor())
+                {
+                    LOG(DEBUG_STEPPERS,
+                        "[STEPPERS]: moveStepperBy: AZ from %l to %l",
+                        _stepperAZ->currentPosition(),
+                        _stepperAZ->currentPosition() + steps);
+                    _stepperAZ->moveTo(_stepperAZ->currentPosition() + steps);
+                }
 #endif
             }
             break;
@@ -4205,6 +4324,16 @@ int Mount::getLocalUtcOffset() const
     return _localUtcOffset;
 }
 
+bool Mount::isDateSet() const
+{
+    return _dateSet;
+}
+
+bool Mount::isTimeSet() const
+{
+    return _timeSet;
+}
+
 /////////////////////////////////
 //
 // setLocalStartDate
@@ -4215,6 +4344,7 @@ void Mount::setLocalStartDate(int year, int month, int day)
     _localStartDate.year  = year;
     _localStartDate.month = month;
     _localStartDate.day   = day;
+    _dateSet              = true;
 
     autoCalcHa();
 }
@@ -4228,6 +4358,7 @@ void Mount::setLocalStartTime(DayTime localTime)
 {
     _localStartTime          = localTime;
     _localStartTimeSetMillis = millis();
+    _timeSet                 = true;
 
     autoCalcHa();
 }

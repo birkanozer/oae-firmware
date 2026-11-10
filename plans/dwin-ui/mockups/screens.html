@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OAE Screen Mockups</title>
+<style>
+  body { margin: 0; padding: 24px; background: #3a3a3a; color: #ddd; font: 14px system-ui, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  p.note { margin: 0 0 20px; color: #aaa; max-width: 1500px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 480px); gap: 28px 28px; }
+  figure { margin: 0; }
+  canvas { display: block; border: 6px solid #111; border-radius: 4px; }
+  figcaption { margin-top: 6px; color: #ccc; }
+  figcaption b { color: #fff; }
+</style>
+</head>
+<body>
+<h1>OAE Robin E3 — Ender 3 V2 screen mockups (480×272)</h1>
+<p class="note">Drawn with the same primitives the firmware uses (DWIN text with fixed font cells 8×16 / 10×20 / 12×24 / 16×32, filled and outlined rectangles). Night theme is the default. Degree and minute marks are drawn as small shapes because the screen fonts are ASCII-only. Knob: turn = move, click = select, hold = back.</p>
+<div class="grid" id="grid"></div>
+<script>
+const FONTS = { 1: [8, 16], 2: [10, 20], 3: [12, 24], 5: [16, 32] };
+const THEMES = {
+  night: { fg: '#a50000', acc: '#ff0000', bg: '#000000', dim: '#5a0000' },
+  day:   { fg: '#ffffff', acc: '#ffa500', bg: '#212121', dim: '#7a7a7a' },
+};
+
+// DWIN-like primitives on a 480x272 canvas
+function screen(caption, theme, draw) {
+  const fig = document.createElement('figure');
+  const c = document.createElement('canvas');
+  c.width = 480; c.height = 272;
+  const g = c.getContext('2d');
+  const T = THEMES[theme];
+  g.fillStyle = T.bg; g.fillRect(0, 0, 480, 272);
+  const api = {
+    T,
+    text(font, x, y, s, fg = T.fg, bg = null) {
+      const [w, h] = FONTS[font];
+      if (bg) { g.fillStyle = bg; g.fillRect(x, y, w * s.length, h); }
+      g.fillStyle = fg;
+      g.font = `bold ${Math.round(h * 0.86)}px Consolas, "Courier New", monospace`;
+      g.textBaseline = 'top';
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '°') { g.strokeStyle = fg; g.lineWidth = Math.max(1, h / 12); g.strokeRect(x + i * w + w * 0.25, y + h * 0.12, w * 0.4, w * 0.4); continue; }
+        if (ch === "'") { g.fillRect(x + i * w + w * 0.4, y + h * 0.1, Math.max(2, w / 6), h * 0.28); continue; }
+        if (ch === '"') { g.fillRect(x + i * w + w * 0.2, y + h * 0.1, Math.max(2, w / 6), h * 0.28); g.fillRect(x + i * w + w * 0.6, y + h * 0.1, Math.max(2, w / 6), h * 0.28); continue; }
+        g.fillText(ch, x + i * w + (w - g.measureText(ch).width) / 2, y + h * 0.08);
+      }
+      return w * s.length;
+    },
+    fill(x0, y0, x1, y1, col) { g.fillStyle = col; g.fillRect(x0, y0, x1 - x0, y1 - y0); },
+    box(x0, y0, x1, y1, col, lw = 2) { g.strokeStyle = col; g.lineWidth = lw; g.strokeRect(x0 + lw / 2, y0 + lw / 2, x1 - x0 - lw, y1 - y0 - lw); },
+    right(font, xr, y, s, fg, bg) { const [w] = FONTS[font]; return api.text(font, xr - w * s.length, y, s, fg, bg); },
+    center(font, y, s, fg, bg) { const [w] = FONTS[font]; return api.text(font, Math.round((480 - w * s.length) / 2), y, s, fg, bg); },
+  };
+  draw(api);
+  fig.appendChild(c);
+  const cap = document.createElement('figcaption');
+  cap.innerHTML = caption;
+  fig.appendChild(cap);
+  document.getElementById('grid').appendChild(fig);
+}
+
+// ---- shared pieces ----
+function titleBar(a, title, right) {
+  a.fill(0, 0, 480, 28, a.T.bg);
+  a.text(2, 8, 4, title, a.T.acc);
+  if (right) a.right(2, 472, 4, right, a.T.fg);
+  a.fill(0, 28, 480, 30, a.T.acc);
+}
+function hint(a, s) {
+  a.fill(0, 248, 480, 249, a.T.dim);
+  a.center(1, 252, s, a.T.dim);
+}
+function statusScreen(a, L, d) {
+  titleBar(a, 'OAE  ' + d.state, d.time);
+  const lx = 8, rx = 248;
+  const row = (y, l1, v1, l2, v2) => {
+    a.text(1, lx, y, l1, a.T.dim); a.text(3, lx, y + 16, v1);
+    a.text(1, rx, y, l2, a.T.dim); a.text(3, rx, y + 16, v2);
+  };
+  row(36, 'RA', d.ra, L.dec, d.dec);
+  row(80, 'ALT', d.alt, 'AZ', d.az);
+  row(124, 'LST', d.lst, L.date, d.date);
+  row(168, L.lat, d.lat, L.lon, d.lon);
+  if (d.warn) { a.fill(0, 214, 480, 242, a.T.acc); a.center(2, 218, d.warn, a.T.bg); }
+  hint(a, L.hintStatus);
+}
+function menuScreen(a, title, items, sel, page, L) {
+  titleBar(a, title, page);
+  items.forEach((it, i) => {
+    const y = 36 + i * 30;
+    if (i === sel) { a.fill(0, y - 2, 480, y + 28, a.T.acc); a.text(3, 16, y + 2, '> ' + it, a.T.bg); }
+    else a.text(3, 16, y + 2, '  ' + it, it.startsWith('(') ? a.T.dim : a.T.fg);
+  });
+  hint(a, L.hintMenu);
+}
+function editorScreen(a, title, label, groups, sel, sub, L, extra) {
+  titleBar(a, title, label);
+  // value in 16x32 font, selected group boxed + underlined
+  let s = groups.join('');
+  const w = 16, x0 = Math.round((480 - w * s.length) / 2), y = 92;
+  a.text(5, x0, y, s);
+  let off = 0;
+  groups.forEach((gr, i) => {
+    const isSep = /^[:\-°'"\s]+$/.test(gr);
+    if (i === sel && !isSep) {
+      a.fill(x0 + off * w - 2, y - 4, x0 + (off + gr.length) * w + 2, y + 36, a.T.acc);
+      a.text(5, x0 + off * w, y, gr, a.T.bg);
+    }
+    off += gr.length;
+  });
+  a.center(2, 148, sub, a.T.dim);
+  if (extra) extra();
+  hint(a, L.hintEdit);
+}
+
+const EN = {
+  dec: 'DEC', date: 'DATE', lat: 'LAT', lon: 'LON',
+  hintStatus: 'Click: menu', hintMenu: 'Turn: move   Click: select   Hold: back',
+  hintEdit: 'Turn: change   Click: next   Hold: cancel',
+};
+const TR = {
+  dec: 'DEC', date: 'TARIH', lat: 'ENLEM', lon: 'BOYLAM',
+  hintStatus: 'Tikla: menu', hintMenu: 'Cevir: sec   Tikla: ac   Basili tut: geri',
+  hintEdit: 'Cevir: degistir   Tikla: ileri   Basili tut: iptal',
+};
+
+const tracking = { state: 'Tracking', time: '23:41:07', ra: '05:35:17', dec: "-05°23'28\"", alt: '+38.4°', az: '161.2°',
+  lst: '04:58:02', date: '2026-11-10', lat: "+41°01'", lon: "+028°58'" };
+
+// 1 Status, time not set
+screen('<b>1. Status</b> — after boot, date/time not set yet (GoTo, Sync, Track here locked)', 'night', a =>
+  statusScreen(a, EN, { state: 'Idle', time: '--:--:--', ra: '00:00:00', dec: "+90°00'00\"", alt: '  ---', az: '  ---',
+    lst: '--:--:--', date: '----------', lat: "+41°01'", lon: "+028°58'", warn: 'Set date & time  (Menu > Setup)' }));
+
+// 2 Status tracking
+screen('<b>2. Status</b> — tracking M42', 'night', a => statusScreen(a, EN, tracking));
+
+// 3 Status slewing
+screen('<b>3. Status</b> — slewing to target (progress bar)', 'night', a => {
+  statusScreen(a, EN, { ...tracking, state: 'Slewing', ra: '04:12:40', dec: "+11°08'12\"", alt: '+29.0°', az: '140.7°' });
+  a.fill(0, 214, 480, 242, a.T.bg); a.box(8, 216, 472, 240, a.T.fg); a.fill(12, 220, 12 + 0.62 * 456, 236, a.T.acc);
+  a.center(1, 220, 'GoTo  62%', a.T.bg);
+});
+
+// 4 Main menu idle
+screen('<b>4. Menu</b> — idle, item 1 selected', 'night', a =>
+  menuScreen(a, 'Menu', ['Track here', 'Jog', 'GoTo RA/Dec', 'Sync RA/Dec', 'Setup', 'Home / Park', 'Settings'], 0, '1/8', EN));
+
+// 5 Menu while moving
+screen('<b>5. Menu</b> — while moving: STOP is always first', 'night', a =>
+  menuScreen(a, 'Menu', ['STOP', 'Stop tracking', 'Jog', 'GoTo RA/Dec', 'Sync RA/Dec', 'Setup', 'Home / Park'], 0, '1/9', EN));
+
+// 6 Jog axis choice -> jog screen
+screen('<b>6. Jog</b> — RA axis, speed 2 of 4; slew stops 0.3 s after the knob stops', 'night', a => {
+  titleBar(a, 'Jog', 'Speed 2/4');
+  a.fill(16, 40, 232, 92, a.T.acc); a.text(5, 108, 50, 'RA', a.T.bg);
+  a.box(248, 40, 464, 92, a.T.dim); a.text(5, 324, 50, 'DEC', a.T.dim);
+  a.center(2, 104, 'Turn left = West     Turn right = East', a.T.dim);
+  a.text(1, 40, 136, 'RA', a.T.dim); a.text(5, 40, 152, '05:35:21');
+  a.text(1, 264, 136, 'DEC', a.T.dim); a.text(3, 264, 156, "-05°23'28\"");
+  a.fill(0, 200, 480, 228, a.T.bg); a.center(3, 202, '<<<  moving  ', a.T.acc);
+  hint(a, 'Turn: move   Click: speed   Hold: back');
+});
+
+// 7 Editor RA
+screen('<b>7. GoTo — RA</b> — editing minutes (step 2 of 3)', 'night', a =>
+  editorScreen(a, 'GoTo', 'RA  1/2', ['05', ':', '35', ':', '17'], 2, 'minutes', EN));
+
+// 8 Editor Dec
+screen('<b>8. GoTo — Dec</b> — editing the sign (step 1 of 4)', 'night', a =>
+  editorScreen(a, 'GoTo', 'DEC  2/2', ['-', '05', '°', '23', "'", '28', '"'], 0, 'sign  +/-', EN));
+
+// 9 GoTo confirm
+screen('<b>9. GoTo — confirm</b> — target checked, click to slew', 'night', a => {
+  titleBar(a, 'GoTo', 'confirm');
+  a.text(1, 40, 44, 'RA', a.T.dim); a.text(5, 40, 60, '05:35:17');
+  a.text(1, 264, 44, 'DEC', a.T.dim); a.text(3, 264, 64, "-05°23'28\"");
+  a.text(1, 40, 108, 'ALT', a.T.dim); a.text(3, 40, 124, '+38.4°');
+  a.text(1, 264, 108, 'SUN DIST', a.T.dim); a.text(3, 264, 124, '112°');
+  a.fill(0, 170, 480, 204, a.T.acc); a.center(3, 175, 'Click: GO   Hold: cancel', a.T.bg);
+  hint(a, 'Tracking starts automatically on arrival');
+});
+
+// 10 GoTo refused
+screen('<b>10. GoTo — refused</b> — target below the horizon (double beep)', 'night', a => {
+  titleBar(a, 'GoTo', 'refused');
+  a.text(1, 40, 44, 'RA', a.T.dim); a.text(5, 40, 60, '18:36:56');
+  a.text(1, 264, 44, 'DEC', a.T.dim); a.text(3, 264, 64, "+38°47'01\"");
+  a.text(1, 40, 108, 'ALT', a.T.dim); a.text(3, 40, 124, '-12.6°');
+  a.text(1, 264, 108, 'MIN ALT', a.T.dim); a.text(3, 264, 124, '+0°');
+  a.box(8, 166, 472, 208, a.T.acc, 3); a.center(3, 175, 'Below the horizon', a.T.acc);
+  hint(a, 'Click or hold: back');
+});
+
+// 11 Setup submenu
+screen('<b>11. Setup</b> — set date &amp; time before Sync / GoTo', 'night', a =>
+  menuScreen(a, 'Setup', ['Date        2026-11-10', 'Time        23:41:07', 'UTC offset  +3', "Latitude    +41°01'", "Longitude   +028°58'", '(set these before Sync)'], 1, '2/5', EN));
+
+// 12 Date editor
+screen('<b>12. Setup — Date</b> — editing the day', 'night', a =>
+  editorScreen(a, 'Setup', 'Date', ['2026', '-', '11', '-', '10'], 4, 'day', EN));
+
+// 13 Home / Park
+screen('<b>13. Home / Park</b>', 'night', a =>
+  menuScreen(a, 'Home / Park', ['Go home', 'Set home here', 'Park', 'Unpark'], 0, '1/4', EN));
+
+// 14 Settings
+screen('<b>14. Settings</b> — held in RAM until slice 3 adds storage', 'night', a =>
+  menuScreen(a, 'Settings', ['Language    English', 'Theme       Night', 'Brightness  8/10', 'Min alt     +0°'], 0, '1/4', EN));
+
+// 15 Turkish status
+screen('<b>15. Status — Turkish</b> (no special letters)', 'night', a =>
+  statusScreen(a, TR, { ...tracking, state: 'Takipte' }));
+
+// 16 Turkish menu
+screen('<b>16. Menu — Turkish</b>', 'night', a =>
+  menuScreen(a, 'Menu', ['Burayi takip et', 'Elle hareket', 'Git RA/Dec', 'Esitle RA/Dec', 'Kurulum', 'Ev / Park', 'Ayarlar'], 2, '3/8', TR));
+
+// 17 Day theme status
+screen('<b>17. Status — day theme</b>', 'day', a => statusScreen(a, EN, tracking));
+
+// 18 Day theme menu
+screen('<b>18. Menu — day theme</b>', 'day', a =>
+  menuScreen(a, 'Menu', ['Track here', 'Jog', 'GoTo RA/Dec', 'Sync RA/Dec', 'Setup', 'Home / Park', 'Settings'], 4, '5/8', EN));
+</script>
+</body>
+</html>

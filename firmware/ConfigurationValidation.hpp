@@ -466,6 +466,14 @@
     #endif
 #endif
 
+#if SUPPLY_VOLTAGE != 12 && SUPPLY_VOLTAGE != 24
+    #error SUPPLY_VOLTAGE must be 12 or 24.
+#endif
+
+#if USE_LCD_UI == 1 && BOARD != BOARD_STM32_MKS_ROBIN_E3
+    #error USE_LCD_UI is only supported on the MKS Robin E3.
+#endif
+
 // For OAT, we must have DEC limits defined, otherwise free slew does not work.
 #ifndef OAM
     #ifndef DEC_LIMIT_UP
@@ -474,4 +482,10 @@
     #ifndef DEC_LIMIT_DOWN
         #error "You must set DEC_LIMIT_DOWN to the number of degrees that your OAT can move downwards from the home position."
     #endif
+#endif
+
+// AZ on a TMC2209 UART must never run on the board's VREF current: a failed UART test keeps it disabled.
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART                \
+    && UART_CONNECTION_TEST_TXRX != 1
+    #error AZ on a TMC2209 UART needs UART_CONNECTION_TEST_TXRX 1 on the Robin E3
 #endif
