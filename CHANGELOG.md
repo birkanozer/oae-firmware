@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `hardware/camera-cap/`: parametric OpenSCAD camera cap that holds the OV5640 module and the ESP32-S3 CAM board directly on the eyepiece (one cap per eyepiece, 25 / 12.5 / 8 mm, held and centred by three M3 thumbscrews; one camera head that moves between caps with a few mm of height travel). Eye-relief defaults are estimates until measured.
+- `hardware/camera-arm/`: parametric OpenSCAD swing-away camera arm, a second camera mount next to the cap. Split collar on the Barlow body with a magnet-detented vertical hinge (0 and 90 degrees, printed hard stop at 0), an arm with a vertical dovetail rail (28 mm of Z travel, engraved marks for 25 / 12.5 / 8 mm), a cup with three nylon centring thumbscrews (about +-2 mm) and a light-shield skirt, and an ESP32-S3 CAM plate on the post. Heights and eye relief are estimates until measured.
 
 ## [v0.5.0] - 2026-11-26
 
