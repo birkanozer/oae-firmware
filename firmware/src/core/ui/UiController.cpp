@@ -75,6 +75,14 @@ void UiController::setLastSavedDate(int32_t yyyymmdd)
     _savedDate = yyyymmdd;
 }
 
+int UiController::loadSettings(const uint8_t *block)
+{
+    const bool ok = _settings.load(block);
+    _lang = _settings.get(SettingId::Language) ? Lang::TR : Lang::EN;
+    const uint8_t supply = block[1 + static_cast<uint8_t>(SettingId::Supply)];
+    return ok && supply < 4 ? kSupplyVolts[supply] : 0;
+}
+
 // ---- actions ----
 
 void UiController::push(UiAction::Kind k, int32_t a, int32_t b)
@@ -333,6 +341,10 @@ void UiController::clickScreen(uint32_t nowMs)
             clickTick();
             openEditor(Edit::PointRa, _ra);
             break;
+        case Screen::Network:  // Own WiFi: Auto -> On -> Off
+            clickTick();
+            _settings.set(SettingId::OwnWifi, _settings.next(SettingId::OwnWifi));
+            break;
         case Screen::ClearsSync:  // yes
             clickTick();
             for (uint8_t i = 0; i < _pendingN; ++i)
@@ -407,6 +419,10 @@ void UiController::holdScreen()
             break;
         case Screen::SetHomeConfirm:
             _screen = Screen::AdjustOptions;
+            break;
+        case Screen::Network:  // back to its row
+            _screen = Screen::Settings;
+            _sel = kNetworkRow;
             break;
         case Screen::AdjustOptions:
         case Screen::Settings:
@@ -540,6 +556,9 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
     const MountState prev = _started ? _m.state : m.state;
     const TextId prevRow0 = _row0;
     _m = m;
+    for (uint8_t i = 0; i < 4; ++i)  // the Supply setting mirrors the firmware's voltage, so that is what gets stored
+        if (kSupplyVolts[i] == m.supplyVoltage)
+            _settings.set(SettingId::Supply, i);
     if (m.hasTarget)  // the adapter reports the target only while slewing: keep the last one
         _haveTarget = true, _tgtRa = m.targetRaSeconds, _tgtDec = m.targetDecArcSec;
     _row0 = row0Label();
@@ -686,6 +705,9 @@ void UiController::renderScreen(Canvas &c) const
             break;
         case Screen::SetHomeConfirm:
             renderSmallConfirm(c, TextId::HdrHome, TextId::SetHomeQ);
+            break;
+        case Screen::Network:
+            renderNetwork(c);
             break;
     }
 }

@@ -6,9 +6,9 @@ roadmap live in `docs/architecture.md`, history in `CHANGELOG.md` and git.
 ## What this is
 
 Unofficial OAE mount controller: `firmware/` (OpenAstroTracker-Firmware v1.14.0 fork ported to
-the MKS Robin E3 v1.1, STM32F103RC), `bridge/` (ESP32-S3: BLE for Android, iPhone hotspot
-HTTPS/WSS), `app/` (PWA, EN/TR). Firmware owns motion, limits, homing and settings; the phone
-owns astronomy math and UI; the bridge is a transparent byte pipe.
+the MKS Robin E3 v1.1, STM32F103RC), `bridge/` (ESP32-S3 CAM: phone hotspot or own access
+point, HTTPS/WSS), `app/` (PWA, EN/TR). Firmware owns motion, limits, homing and settings; the
+phone owns astronomy math and UI; the bridge pipes client bytes and adds its own `:XN` polls, one command in flight.
 
 ## Workflow
 
@@ -51,7 +51,7 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
   and reportedly broken envs).
 - 2026-11-10 Android links over Web Bluetooth (Chrome). iPhone links over its own Personal
   Hotspot: the ESP32 joins as a station and serves the app over HTTPS + WSS (project CA installed
-  once as a profile). No ESP32 access point.
+  once as a profile). No ESP32 access point. (Superseded 2026-11-25.)
 - 2026-11-10 ESP32 ↔ STM32 on USART2 (PA2/PA3); USART1 stays on USB for ASCOM / debug.
 - 2026-11-10 AZ and focus 28BYJ-48: both drive methods, per axis — ULN2003 on EXP1 pins or
   bipolar-modded on a free TMC2209 socket.
@@ -68,3 +68,9 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
 - 2026-11-10 Onboard screen is the stock Ender 3 LCD (ENH12864Z-1, ST7920 128×64 mono, knob,
   buzzer) on the board's dedicated "Ender-3 EXP1" header, drawn with U8g2 (BSD-2). Supersedes the
   Ender 3 V2 DWIN plan.
+- 2026-11-25 Both phones link over WiFi; Bluetooth is dropped. The bridge joins the phone's hotspot
+  first and starts its own access point when none appears within ~20 s (Own WiFi Auto) or always
+  (On), set on the LCD (Settings > Network) and read by the bridge over `:XNG`. Supersedes the Web
+  Bluetooth and "no ESP32 access point" decisions.
+- 2026-11-25 One ESP32-S3 CAM on the telescope does camera and bridge, linked to the Robin's USART2
+  by a standard USB-C cable carrying serial and 5 V, not USB (`docs/wiring.md`, README safety note).

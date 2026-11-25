@@ -254,6 +254,36 @@ class FakeExtra : public meade::IMeadeExtraHandlers
     {
         shutdownCalled = true;
     }
+
+    // Network leaves (:XN): captured values, -1 = not called
+    int netMode    = -1;
+    int netClients = -1;
+    int netRssi    = 1;
+    int netIp[4]   = {-1, -1, -1, -1};
+    std::string netName;
+    bool netNameCalled = false;
+    uint8_t ownWifi    = 2;
+
+    void onNetStatus(uint8_t mode, uint8_t clients, int8_t rssi) override
+    {
+        netMode    = mode;
+        netClients = clients;
+        netRssi    = rssi;
+    }
+    void onNetIp(const uint8_t ip[4]) override
+    {
+        for (int i = 0; i < 4; ++i)
+            netIp[i] = ip[i];
+    }
+    void onNetName(const char *ssid) override
+    {
+        netName       = ssid;
+        netNameCalled = true;
+    }
+    uint8_t onNetOwnWifi() override
+    {
+        return ownWifi;
+    }
 };
 
 const char *dispatch(const char *suffix, FakeExtra &h)
@@ -547,4 +577,93 @@ TEST(MeadeExtra, level_get_temperature_numeric_float_when_available)
     h.levelAvailable  = true;
     h.gyroTemperature = 23.5f;
     EXPECT_STREQ("23.5#", dispatch("LGT", h));
+}
+
+// ---- Network leaves (:XN, from the ESP32 bridge: untrusted) -----------------
+
+TEST(MeadeExtra, net_status_valid)
+{
+    FakeExtra h;
+    EXPECT_STREQ("1", dispatch("NM1,3,-58", h));
+    EXPECT_EQ(1, h.netMode);
+    EXPECT_EQ(3, h.netClients);
+    EXPECT_EQ(-58, h.netRssi);
+    EXPECT_STREQ("1", dispatch("NM3,9,-127", h));
+    EXPECT_EQ(-127, h.netRssi);
+    EXPECT_STREQ("1", dispatch("NM0,0,0", h));
+    EXPECT_EQ(0, h.netMode);
+    EXPECT_EQ(0, h.netRssi);
+}
+
+TEST(MeadeExtra, net_status_malformed_replies_zero_and_keeps_state)
+{
+    const char *bad[] = {"NM",          "NM4,0,0",    "NM1,10,0",  "NM1,3",      "NM1,3,",     "NM1,3,-",   "NM1,3,-128",
+                         "NM1,3,5",     "NM1,3,-58x", "NM1,3,-58,", "NM-1,3,-58", "NM1;3;-58",  "NMa,3,-58", "NM1,,-58",
+                         "NM1,3,-0058", "NM 1,3,-58", "NM1,3,-58 ", "NM11,3,-58", "NM1,3,99999999999999999999"};
+    for (const char *c : bad)
+    {
+        FakeExtra h;
+        EXPECT_STREQ("0", dispatch(c, h)) << c;
+        EXPECT_EQ(-1, h.netMode) << c;
+    }
+}
+
+TEST(MeadeExtra, net_ip_valid)
+{
+    FakeExtra h;
+    EXPECT_STREQ("1", dispatch("NI172.20.10.2", h));
+    EXPECT_EQ(172, h.netIp[0]);
+    EXPECT_EQ(20, h.netIp[1]);
+    EXPECT_EQ(10, h.netIp[2]);
+    EXPECT_EQ(2, h.netIp[3]);
+    EXPECT_STREQ("1", dispatch("NI255.255.255.255", h));
+    EXPECT_EQ(255, h.netIp[3]);
+    EXPECT_STREQ("1", dispatch("NI0.0.0.0", h));
+    EXPECT_EQ(0, h.netIp[0]);
+}
+
+TEST(MeadeExtra, net_ip_malformed_replies_zero)
+{
+    const char *bad[] = {"NI",          "NI1.2.3",      "NI1.2.3.4.5", "NI256.1.1.1", "NI1.2.3.4x", "NI1..3.4",
+                         "NI.1.2.3",    "NI1.2.3.",     "NI1000.1.1.1", "NI-1.2.3.4", "NI1,2,3,4",  "NI 1.2.3.4",
+                         "NI0001.2.3.4", "NI1.2.3.99999999999999999999"};
+    for (const char *c : bad)
+    {
+        FakeExtra h;
+        EXPECT_STREQ("0", dispatch(c, h)) << c;
+        EXPECT_EQ(-1, h.netIp[0]) << c;
+    }
+}
+
+TEST(MeadeExtra, net_name_sanitised_and_bounded)
+{
+    FakeExtra h;
+    EXPECT_STREQ("1", dispatch("NNMy iPhone", h));
+    EXPECT_EQ("My iPhone", h.netName);
+    EXPECT_STREQ("1", dispatch("NN", h));  // no network
+    EXPECT_TRUE(h.netNameCalled);
+    EXPECT_EQ("", h.netName);
+    EXPECT_STREQ("1", dispatch("NNa\x01" "b\x7F" "\xC3\xA7", h));  // control, DEL and UTF-8 bytes -> '?'
+    EXPECT_EQ("a?b???", h.netName);
+    EXPECT_STREQ("1", dispatch("NN12345678901234567890EXTRA-BYTES-ARE-DROPPED-0123456789012345678901234567890123456789", h));
+    EXPECT_EQ("12345678901234567890", h.netName);
+}
+
+TEST(MeadeExtra, net_own_wifi_get)
+{
+    FakeExtra h;
+    for (uint8_t v : {uint8_t(0), uint8_t(1), uint8_t(2)})
+    {
+        h.ownWifi = v;
+        EXPECT_EQ(std::to_string(v) + "#", dispatch("NG", h));
+    }
+    EXPECT_STREQ("", dispatch("NGx", h));
+}
+
+TEST(MeadeExtra, net_unknown_leaf_emits_empty)
+{
+    FakeExtra h;
+    EXPECT_STREQ("", dispatch("N", h));
+    EXPECT_STREQ("", dispatch("NX1", h));
+    EXPECT_EQ(-1, h.netMode);
 }

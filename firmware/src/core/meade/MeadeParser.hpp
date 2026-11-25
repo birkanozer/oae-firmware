@@ -779,6 +779,17 @@ class IMeadeExtraHandlers
     virtual void onLevelSetReferenceRoll(float v)      = 0;
     virtual void onLevelStartup()                      = 0;
     virtual void onLevelShutdown()                     = 0;
+
+    // ---- Network-leaves (:XN, the ESP32 bridge reports its WiFi) -------
+    // The parser validates every value first (the bridge is a trust boundary); malformed commands never get here.
+    /** @brief `:XNM<mode>,<clients>,<rssi>#` — mode 0 Off, 1 Hotspot, 2 Own WiFi, 3 Connecting; clients 0..9; rssi -127..0 dBm. */
+    virtual void onNetStatus(uint8_t mode, uint8_t clients, int8_t rssi) = 0;
+    /** @brief `:XNI<a.b.c.d>#` — the bridge's IPv4 address. */
+    virtual void onNetIp(const uint8_t ip[4]) = 0;
+    /** @brief `:XNN<ssid>#` — at most 20 printable ASCII characters. Bytes >= 0x7F become '?' here, but f_serial drops bytes < 0x20 (0x06 is ACK) and '#' ends the command, so the bridge must replace `#` and control bytes. */
+    virtual void onNetName(const char *ssid) = 0;
+    /** @brief `:XNG#` — the Own WiFi setting: 0 Auto, 1 On, 2 Off. */
+    virtual uint8_t onNetOwnWifi() = 0;
 };
 
 /**
@@ -789,6 +800,9 @@ class IMeadeExtraHandlers
  * @param handlers Extra-family callbacks.
  */
 void handleMeadeExtra(MeadeResponse &r, const char *suffix, IMeadeExtraHandlers &handlers);
+
+/** @brief The `:XN...` network leaves (MeadeParserNetwork.cpp); `leaf` follows the `N`. */
+void handleMeadeExtraNet(MeadeResponse &r, const char *leaf, IMeadeExtraHandlers &handlers);
 
 // ---------------------------------------------------------------------------
 // Aggregate handler interface

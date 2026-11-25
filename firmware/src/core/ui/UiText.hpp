@@ -186,6 +186,16 @@ enum class TextId : uint8_t
     JogWord,
     FootAdjust,
     MsgStopFirst,
+    // Settings > Network
+    NetworkRow,
+    HdrNetwork,
+    ModeRow,
+    NetHotspot,
+    NetOwnWifi,
+    NetConnecting,
+    NetNoBridge,
+    NetClients,
+    Auto,
     Count
 };
 

@@ -174,6 +174,15 @@ const Entry kTable[] = {
     {"JOG", "KAYDIR"},
     {"click:axis hold:more", "tikla:eksen tut:ek"},
     {"Stop the mount first", "Once durdur"},
+    {"Network", "Ag"},
+    {"NETWORK", "AG"},
+    {"Mode", "Mod"},
+    {"Hotspot", "Hotspot"},
+    {"Own WiFi", "Kendi WiFi"},
+    {"Connecting", "Baglaniyor"},
+    {"No bridge", "Kopru yok"},
+    {"Clients", "Istemci"},
+    {"Auto", "Otomatik"},
 };
 
 static_assert(sizeof(kTable) / sizeof(kTable[0]) == static_cast<size_t>(TextId::Count), "kTable must match TextId");

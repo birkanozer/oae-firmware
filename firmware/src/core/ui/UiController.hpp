@@ -22,6 +22,28 @@ enum class MountState : uint8_t
     Fault
 };
 
+// What the ESP32 bridge last reported over :XN (the LX200 handlers store it, the adapter copies it into the snapshot).
+// seen/atMs: the last :XNM status and when it arrived (millis); after 5 s without one the Network page shows No bridge.
+struct NetStatus
+{
+    bool seen;
+    uint32_t atMs;
+    uint8_t mode;  // 0 Off, 1 Hotspot, 2 Own WiFi, 3 Connecting
+    uint8_t clients;
+    int8_t rssi;  // dBm, 0 = unknown
+    uint8_t ip[4];  // 0.0.0.0 = none
+    char ssid[21];  // printable ASCII, at most 20
+};
+
+constexpr uint32_t kNoBridgeMs = 5000;  // Network: No bridge after this long without a :XNM status
+
+// Latch it off once it is stale: a signed difference would turn positive again after 2^31 ms (about 24.8 days).
+inline void expireNet(NetStatus &n, uint32_t nowMs)
+{
+    if (n.seen && static_cast<int32_t>(nowMs - n.atMs) >= static_cast<int32_t>(kNoBridgeMs))
+        n.seen = false;
+}
+
 // What the UI needs from the mount, filled by the adapter before every tick().
 // dateSet/timeSet: set since this boot. rebooted: the last reset was unplanned (only selects the
 // warning page and text; the date+time lock comes from dateSet/timeSet).
@@ -46,6 +68,7 @@ struct MountSnapshot
     bool azFault, focusFault, altFault;  // its driver failed the UART test: never move it
     int32_t axisPos[5];
     float stepsPerDeg[5];
+    NetStatus net;
 };
 
 struct UiAction
@@ -99,6 +122,10 @@ class UiController
     bool tick(uint32_t nowMs, const MountSnapshot &m);  // returns true when the canvas changed
     bool popAction(UiAction &out);  // FIFO, capacity 8, drops oldest
     void setLastSavedDate(int32_t yyyymmdd);  // prefill (S1b)
+    // Persisted Settings: the adapter loads the stored block before the first tick and stores settings() on change.
+    // Returns the stored supply volts to apply, 0 = none (keep SUPPLY_VOLTAGE).
+    int loadSettings(const uint8_t *block);
+    const UiSettings &settings() const { return _settings; }
 
   private:
     enum class Screen : uint8_t
@@ -114,7 +141,8 @@ class UiController
         Settings,
         Adjust,  // step moves per detent on the selected axis
         AdjustOptions,  // step size, sync on target, set home, go home
-        SetHomeConfirm
+        SetHomeConfirm,
+        Network  // under Settings: what the bridge reports, Own WiFi (click cycles it)
     };
     enum class Edit : uint8_t
     {
@@ -134,6 +162,8 @@ class UiController
         bool lock;
     };
     static constexpr uint8_t kItems = 9;
+    // Settings rows: Setup, Language .. Supply (row = SettingId + 1), Network, Back.
+    static constexpr uint8_t kNetworkRow = static_cast<uint8_t>(SettingId::Supply) + 2;
     // Main menu rows, fixed indices (row 0 = motion slot).
     enum Row : uint8_t
     {
@@ -235,6 +265,7 @@ class UiController
     void renderAdjust(Canvas &c) const;
     void stepText(char *out, size_t n) const;  // "1000" or "JOG SLOW"
     void renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const;
+    void renderNetwork(Canvas &c) const;
     void header(Canvas &c, const char *left, const char *right, bool inverted = false) const;
     void footer(Canvas &c, const char *hint) const;
     void bar(Canvas &c, int16_t y0, int16_t y1, int16_t ty, const char *s) const;

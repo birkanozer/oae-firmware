@@ -36,7 +36,8 @@ bool parseMeadeCommand(const char *input, MeadeParseResult &result)
     size_t nlen = 0;
     for (const char *cursor = input; *cursor != '\0' && nlen + 1 < sizeof(normalized); ++cursor)
     {
-        if (*cursor != ' ')
+        // :XNN carries the bridge's WiFi name: its spaces are data, not padding.
+        if (*cursor != ' ' || (nlen >= 4 && normalized[1] == 'X' && normalized[2] == 'N' && normalized[3] == 'N'))
         {
             normalized[nlen++] = *cursor;
         }

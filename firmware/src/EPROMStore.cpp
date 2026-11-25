@@ -1065,3 +1065,28 @@ void EEPROMStore::storeALTPosition(int32_t altPosition)
     updateFlagsExtended(ALT_POSITION_MARKER_FLAG);
     commit();  // Complete the transaction
 }
+
+#if USE_LCD_UI == 1
+bool EEPROMStore::getUiSettings(uint8_t *out, uint8_t n)
+{
+    for (uint8_t i = 0; i < n && i < UI_SETTINGS_BYTES; i++)
+    {
+        out[i] = readUint8(static_cast<ItemAddress>(UI_SETTINGS_ADDR + i));
+    }
+    #if !(USE_DUMMY_EEPROM == true) && defined(ARDUINO_ARCH_STM32)
+    return !busFailed;  // a failed read returns 0xFF, which can look like a valid value (MinAlt -1)
+    #else
+    return true;
+    #endif
+}
+
+void EEPROMStore::storeUiSettings(const uint8_t *in, uint8_t n)
+{
+    // Values first, the marker (byte 0) last: a write cut short on a blank store leaves no valid-looking block.
+    for (uint8_t i = n < UI_SETTINGS_BYTES ? n : UI_SETTINGS_BYTES; i-- > 0;)
+    {
+        updateUint8(static_cast<ItemAddress>(UI_SETTINGS_ADDR + i), in[i]);
+    }
+    commit();  // Complete the transaction
+}
+#endif

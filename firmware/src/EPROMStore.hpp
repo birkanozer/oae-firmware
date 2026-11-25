@@ -74,6 +74,13 @@ class EEPROMStore
     static int32_t getALTPosition();
     static void storeALTPosition(int32_t altPosition);
 
+#if USE_LCD_UI == 1
+    // The onboard LCD's Settings block (core::UiSettings::save layout, its own marker in byte 0), at most UI_SETTINGS_BYTES.
+    static constexpr uint8_t UI_SETTINGS_BYTES = 8;
+    static bool getUiSettings(uint8_t *out, uint8_t n);  // false when a read failed: the block is not to be trusted
+    static void storeUiSettings(const uint8_t *in, uint8_t n);
+#endif
+
   private:
     /////////////////////////////////
     //
@@ -92,7 +99,7 @@ class EEPROMStore
     //     DEC stepper motor steps per degree (8/9) ------------+|
     //      RA stepper motor steps per degree (6/7) -------------+
     //
-    // Locations for HATime (1/2), Brightness (16)
+    // Locations for HATime (1/2), Brightness (16), LCD Settings block (74-81, own marker in 74, no flag bit)
     //
     // If Location 5 is 0xCF, then an extended 16-bit flag is stored in 21/22 and
     // indicates the additional fields that have been stored: 0000 0000 0000 0000
@@ -227,7 +234,8 @@ class EEPROMStore
         _ALT_NORM_STEPS_DEGREE_ADDR_1,
         _ALT_NORM_STEPS_DEGREE_ADDR_2,
         _ALT_NORM_STEPS_DEGREE_ADDR_3,  // Int32
-        STORE_SIZE = 74
+        UI_SETTINGS_ADDR = 74,          // 8 bytes, USE_LCD_UI only
+        STORE_SIZE       = 82
     };
 
     // Helper functions

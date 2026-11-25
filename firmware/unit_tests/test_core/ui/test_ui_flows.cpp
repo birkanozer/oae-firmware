@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include "UiHarness.hpp"
 #include "core/ui/SkyMath.hpp"
@@ -843,8 +844,9 @@ TEST(UiFlowsTest, SettingsFromTable)
     EXPECT_TRUE(u.drew(row("Dil/Lang", "English").c_str()));
     EXPECT_TRUE(u.drew(row("Min alt", deg(0)).c_str()));
     EXPECT_TRUE(u.drew(row("Beep", "On").c_str()));
-    u.turn(5);  // Back, with the Supply row above it
+    u.turn(6);  // Back, with the Supply and Network rows above it
     EXPECT_TRUE(u.drew(row("Supply", "24 V").c_str()));
+    EXPECT_TRUE(u.drew("Network"));
     EXPECT_TRUE(u.drew("Back"));
     u.click();  // Back
     EXPECT_TRUE(u.drew("MENU"));
@@ -989,6 +991,232 @@ TEST(UiFlowsTest, SupplyRowShowsSnapshotValue)
     EXPECT_TRUE(u.inv(row("Supply", "24 V").c_str()));
 }
 
+// ---------------- persistent settings ----------------
+
+using core::SettingId;
+using core::UiSettings;
+
+TEST(UiFlowsTest, SettingsBlockRoundTrip)
+{
+    UiSettings s;
+    s.set(SettingId::Language, 1);
+    s.set(SettingId::MinAlt, -10);
+    s.set(SettingId::Beep, 0);
+    s.set(SettingId::Supply, 1);
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    EXPECT_EQ(UiSettings::kStoreMarker, b[0]);
+    UiSettings r;
+    ASSERT_TRUE(r.load(b));
+    for (uint8_t i = 0; i < static_cast<uint8_t>(SettingId::Count); ++i)
+        EXPECT_EQ(s.get(static_cast<SettingId>(i)), r.get(static_cast<SettingId>(i))) << int(i);
+}
+
+TEST(UiFlowsTest, BlankOrClearedStoreKeepsDefaults)
+{
+    for (uint8_t fill : {uint8_t(0x00), uint8_t(0xFF)})  // cleared store, blank chip (or a failed read)
+    {
+        uint8_t b[UiSettings::kStoreBytes];
+        memset(b, fill, sizeof b);
+        UiSettings s, d;
+        EXPECT_FALSE(s.load(b)) << int(fill);
+        for (uint8_t i = 0; i < static_cast<uint8_t>(SettingId::Count); ++i)
+            EXPECT_EQ(d.get(static_cast<SettingId>(i)), s.get(static_cast<SettingId>(i))) << int(fill) << " " << int(i);
+    }
+}
+
+TEST(UiFlowsTest, StoredValueOutOfRangeKeepsItsDefault)
+{
+    UiSettings s;
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    b[1 + static_cast<uint8_t>(SettingId::Language)] = 1;
+    b[1 + static_cast<uint8_t>(SettingId::MinAlt)] = 100;
+    b[1 + static_cast<uint8_t>(SettingId::Supply)] = 9;
+    UiSettings r;
+    ASSERT_TRUE(r.load(b));
+    EXPECT_EQ(1, r.get(SettingId::Language));
+    EXPECT_EQ(0, r.get(SettingId::MinAlt));
+    EXPECT_EQ(3, r.get(SettingId::Supply));
+}
+
+TEST(UiFlowsTest, LoadedSettingsApplyBeforeTheFirstFrame)
+{
+    UiSettings s;
+    s.set(SettingId::Language, 1);
+    s.set(SettingId::Supply, 0);
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    Ui u;
+    EXPECT_EQ(12, u.ui.loadSettings(b));  // the stored voltage, for the adapter to apply
+    u.m.supplyVoltage = 12;
+    u.tick();
+    EXPECT_TRUE(u.drew("TAKIPTE"));
+    EXPECT_EQ(1, u.ui.settings().get(SettingId::Language));
+    b[1 + static_cast<uint8_t>(SettingId::Supply)] = 7;  // invalid: keep SUPPLY_VOLTAGE
+    EXPECT_EQ(0, u.ui.loadSettings(b));
+    s.save(b);
+    b[0] = 0xFF;  // no block
+    EXPECT_EQ(0, u.ui.loadSettings(b));
+}
+
+TEST(UiFlowsTest, SupplySettingFollowsTheFirmware)
+{
+    // The stored Supply is the firmware's voltage, not the row's default: a 12 V build must not store 24 V.
+    Ui u;
+    u.m.supplyVoltage = 15;
+    u.tick();
+    EXPECT_EQ(1, u.ui.settings().get(SettingId::Supply));
+    u.m.supplyVoltage = 18;  // not a choice: unchanged
+    u.tick(10);
+    EXPECT_EQ(1, u.ui.settings().get(SettingId::Supply));
+}
+
+// ---------------- Settings > Network ----------------
+
+namespace {
+
+// Status -> Settings -> Network page.
+void network(Ui &u)
+{
+    menu(u, 3);
+    u.turn(5);
+    u.click();
+}
+
+// The bridge reported now (the adapter copies what the :XN commands stored).
+void bridge(Ui &u, uint8_t mode, const char *ssid)
+{
+    u.m.net.seen = true;
+    u.m.net.atMs = u.t;
+    u.m.net.mode = mode;
+    u.m.net.clients = 2;
+    u.m.net.rssi = -58;
+    const uint8_t ip[4] = {172, 20, 10, 2};
+    memcpy(u.m.net.ip, ip, 4);
+    snprintf(u.m.net.ssid, sizeof u.m.net.ssid, "%s", ssid);
+}
+
+}  // namespace
+
+TEST(UiFlowsTest, NetworkRowSitsAboveBack)
+{
+    Ui u;
+    u.tick();
+    menu(u, 3);
+    u.turn(5);
+    EXPECT_TRUE(u.inv("Network"));
+    u.turn(1);
+    EXPECT_TRUE(u.inv("Back"));
+}
+
+TEST(UiFlowsTest, NetworkPageWithoutBridge)
+{
+    Ui u;
+    u.tick();
+    network(u);
+    EXPECT_TRUE(u.drew("NETWORK"));
+    EXPECT_TRUE(u.drew("Mode: No bridge"));
+    EXPECT_FALSE(starts(u, "IP"));
+    EXPECT_FALSE(starts(u, "Clients"));
+    EXPECT_TRUE(u.inv("Own WiFi: Auto"));
+    EXPECT_EQ(0, u.c.violations);
+}
+
+TEST(UiFlowsTest, NetworkPageShowsWhatTheBridgeReports)
+{
+    Ui u;
+    bridge(u, 1, "My iPhone");
+    u.tick();
+    network(u);
+    EXPECT_TRUE(u.drew("Mode: Hotspot"));
+    EXPECT_TRUE(u.drew("My iPhone"));
+    EXPECT_TRUE(u.drew("IP: 172.20.10.2"));
+    EXPECT_TRUE(u.drew("Clients: 2  -58 dBm"));  // the signal only in Hotspot mode
+    u.m.net.mode = 2;
+    u.tick(10);
+    EXPECT_TRUE(u.drew("Mode: Own WiFi"));
+    EXPECT_TRUE(u.drew("Clients: 2"));
+    u.m.net.mode = 3;
+    u.tick(10);
+    EXPECT_TRUE(u.drew("Mode: Connecting"));
+    u.m.net.mode = 0;
+    memset(u.m.net.ip, 0, 4);
+    u.tick(10);
+    EXPECT_TRUE(u.drew("Mode: Off"));
+    EXPECT_TRUE(u.drew("IP: -"));
+    u.m.net.mode = 9;  // never from the parser: shown as Off
+    u.tick(10);
+    EXPECT_TRUE(u.drew("Mode: Off"));
+    EXPECT_EQ(0, u.c.violations);
+}
+
+TEST(UiFlowsTest, NetworkPageShowsNoBridgeAfterFiveSeconds)
+{
+    Ui u;
+    u.tick();
+    network(u);
+    bridge(u, 1, "My iPhone");
+    u.tick(4990);
+    EXPECT_TRUE(u.drew("Mode: Hotspot"));
+    u.tick(10);  // 5 s without a status
+    EXPECT_TRUE(u.drew("Mode: No bridge"));
+    EXPECT_FALSE(u.drew("My iPhone"));
+    EXPECT_FALSE(starts(u, "IP"));
+    u.m.net.atMs = u.t;
+    u.tick(10);
+    EXPECT_TRUE(u.drew("Mode: Hotspot"));
+}
+
+TEST(UiFlowsTest, NetworkOwnWifiCyclesAndLongPressGoesBack)
+{
+    Ui u;
+    u.tick();
+    network(u);
+    u.actions();
+    u.click();
+    EXPECT_TRUE(u.inv("Own WiFi: On"));
+    EXPECT_EQ(1, u.ui.settings().get(SettingId::OwnWifi));
+    EXPECT_TRUE(Ui::has(u.actions(), Kind::Beep));  // the click tick
+    u.click();
+    EXPECT_TRUE(u.inv("Own WiFi: Off"));
+    u.click();
+    EXPECT_TRUE(u.inv("Own WiFi: Auto"));
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::OwnWifi));
+    u.hold();
+    EXPECT_TRUE(u.drew("SETTINGS"));
+    EXPECT_TRUE(u.inv("Network"));  // back on the row it came from
+}
+
+TEST(UiFlowsTest, NetworkPageClickWhileMovingStops)
+{
+    Ui u;
+    u.m.state = MountState::Idle;
+    u.tick();
+    network(u);
+    u.state(MountState::Slewing);
+    EXPECT_TRUE(u.inv("click: STOP"));
+    u.actions();
+    u.click();
+    EXPECT_TRUE(Ui::has(u.actions(), Kind::Stop));
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::OwnWifi));  // not changed
+    EXPECT_TRUE(u.drew("STOPPED"));
+}
+
+TEST(UiFlowsTest, OwnWifiIsStored)
+{
+    Ui u;
+    u.tick();
+    network(u);
+    u.click();
+    u.click();  // Off
+    uint8_t b[UiSettings::kStoreBytes];
+    u.ui.settings().save(b);
+    UiSettings r;
+    ASSERT_TRUE(r.load(b));
+    EXPECT_EQ(2, r.get(SettingId::OwnWifi));
+}
+
 // ---------------- width lint ----------------
 
 namespace {
@@ -1102,6 +1330,27 @@ int walk(Ui &u)
     u.hold();  // menu
     u.hold();  // status
 
+    // Network: no bridge, every mode with the longest name, address and signal, Own WiFi through its values, the STOP bar.
+    menu(u, 3);
+    u.turn(5);
+    u.click();
+    u.m.net.seen = true;
+    u.m.net.clients = 9;
+    u.m.net.rssi = -127;
+    memset(u.m.net.ip, 255, 4);
+    snprintf(u.m.net.ssid, sizeof u.m.net.ssid, "%s", "WWWWWWWWWWWWWWWWWWWW");
+    for (uint8_t md = 0; md < 4; ++md)
+    {
+        u.m.net.mode = md;
+        u.m.net.atMs = u.t;
+        u.tick(10);
+    }
+    clicks(u, 3);
+    u.state(MountState::Slewing);
+    u.click();  // STOP: status
+    u.state(MountState::Idle);
+    u.tick(600);
+
     // Adjust: every axis with every step size, the options, Set home confirm, locks, moving, a failed driver.
     u.m.hasAz = u.m.hasFocus = true;
     u.m.stepsPerDeg[0] = 1000.0f;  // 1 step = 0.001 deg: arc-seconds
@@ -1198,7 +1447,8 @@ TEST(UiFlowsTest, AllScreensFit)
                           "BIG JUMP - CHECK", "SYNCED", "SETUP", "SETUP DATE", "SETUP TIME", "SETUP UTC", "SETUP LAT", "SETUP LON",
                           "Clears Sync. Sure?", "SETTINGS", "MIN ALT", "PARKING", "HOMING", "> park position",
                           "Set date+time first", "REBOOTED - SET TIME", "DEC DRIVER FAULT", "turn to wake", "click: STOP", "ADJUST", "FOCUS",
-                          "Set home here?", "Stop the mount first", "click:axis hold:more", "DRIVER FAULT", "Sync on target"})
+                          "Set home here?", "Stop the mount first", "click:axis hold:more", "DRIVER FAULT", "Sync on target", "NETWORK",
+                          "Mode: No bridge", "Mode: Connecting", "Own WiFi: Off", "IP: 255.255.255.255", "Clients: 9  -127 dBm"})
         EXPECT_EQ(1u, u.c.seen.count(s)) << s;
     u.c.seen.clear();
     toggleLang(u);
@@ -1207,7 +1457,8 @@ TEST(UiFlowsTest, AllScreensFit)
     for (const char *s : {"HEDEF RA", "HEDEF DEC", "TIKLA = GIT", "TIKLA = ESITLE", "UFKUN ALTINDA", "GUNESE COK YAKIN", "GECERSIZ",
                           "BUYUK FARK-KONTROL", "ESITLENDI", "KURULUM BOYLAM", "Esitleme silinsin?", "AYARLAR", "MIN YUKS",
                           "PARK EDIYOR", "EVE GIDIYOR", "Once tarih/saat gir", "cevir: uyan", "tikla: DURDUR", "AYAR", "ODAK",
-                          "Evi buraya ayarla?", "Once durdur", "tikla:eksen tut:ek", "SURUCU HATASI", "Hedefe esitle"})
+                          "Evi buraya ayarla?", "Once durdur", "tikla:eksen tut:ek", "SURUCU HATASI", "Hedefe esitle", "AG",
+                          "Mod: Kopru yok", "Mod: Baglaniyor", "Kendi WiFi: Otomatik", "Istemci: 9  -127 dBm"})
         EXPECT_EQ(1u, u.c.seen.count(s)) << s;
 
     // The selector cells and menu rows in both languages.
@@ -1842,4 +2093,76 @@ TEST(UiFlowsTest, ClickRightAfterStepMoveIsStop)
     EXPECT_TRUE(Ui::has(v, Kind::MoveSteps));
     EXPECT_TRUE(Ui::has(v, Kind::Stop));
     EXPECT_TRUE(u.drew("STOPPED"));
+}
+
+TEST(UiFlowsTest, LoadFallsBackToDefaultsPerField)
+{
+    UiSettings d;
+    uint8_t b[UiSettings::kStoreBytes];
+    memset(b, 0xFF, sizeof b);  // a read that failed after the marker: MinAlt 0xFF is -1, inside its range
+    b[0] = UiSettings::kStoreMarker;
+    UiSettings s;
+    s.set(SettingId::Language, 1);  // not the defaults before loading: load must reset them
+    ASSERT_TRUE(s.load(b));
+    EXPECT_EQ(d.get(SettingId::Language), s.get(SettingId::Language));
+    EXPECT_EQ(d.get(SettingId::Beep), s.get(SettingId::Beep));
+    // The adapter zeroes the whole block when the read failed: marker gone, everything default.
+    UiSettings t;
+    t.set(SettingId::MinAlt, 5);
+    memset(b, 0, sizeof b);
+    EXPECT_FALSE(t.load(b));
+    EXPECT_EQ(d.get(SettingId::MinAlt), t.get(SettingId::MinAlt));
+}
+
+TEST(UiFlowsTest, FactoryResetReloadReturnsDefaults)
+{
+    Ui u;
+    UiSettings s;
+    s.set(SettingId::Language, 1);
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    u.ui.loadSettings(b);
+    EXPECT_EQ(1, u.ui.settings().get(SettingId::Language));
+    memset(b, 0, sizeof b);  // :XFR cleared the store
+    EXPECT_EQ(0, u.ui.loadSettings(b));
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::Language));
+}
+
+TEST(UiFlowsTest, SettingsStoreLatchWritesOnChangeOnly)
+{
+    core::SettingsStoreLatch l;
+    UiSettings s;
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    EXPECT_FALSE(l.observe(b));  // boot: records, never writes
+    EXPECT_FALSE(l.observe(b));
+    s.set(SettingId::Beep, 0);
+    s.save(b);
+    EXPECT_TRUE(l.observe(b));  // a change writes once
+    EXPECT_FALSE(l.observe(b));
+    s.set(SettingId::Beep, 1);
+    s.save(b);
+    l.reset();  // after :XFR: the next pass records without writing
+    EXPECT_FALSE(l.observe(b));
+    EXPECT_FALSE(l.observe(b));
+    s.set(SettingId::Beep, 0);
+    s.save(b);
+    EXPECT_TRUE(l.observe(b));
+}
+
+TEST(UiFlowsTest, StaleBridgeStatusStaysExpired)
+{
+    core::NetStatus n{};
+    n.seen = true;
+    n.atMs = 1000;
+    core::expireNet(n, 1000 + core::kNoBridgeMs - 1);
+    EXPECT_TRUE(n.seen);
+    core::expireNet(n, 1000 + core::kNoBridgeMs);
+    EXPECT_FALSE(n.seen);
+    core::expireNet(n, 1000 + 0x80000000u + 10);  // ~24.8 days later: must not come back
+    EXPECT_FALSE(n.seen);
+    n.seen = true;  // a new :XNM stamps atMs again
+    n.atMs = 2000;
+    core::expireNet(n, 1500);  // atMs slightly ahead of now (stamped after the tick began)
+    EXPECT_TRUE(n.seen);
 }

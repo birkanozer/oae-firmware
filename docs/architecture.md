@@ -6,7 +6,7 @@ The vision, architecture and roadmap. Read before non-trivial work. Settled deci
 ## 1. Goal
 
 Drive an **OpenAstroExplorer (OAE)** mount from an **MKS Robin E3 v1.1** board and control it
-entirely from a phone over **Bluetooth**, with no internet required:
+entirely from a phone over **WiFi**, with no internet required:
 
 - manual jog and automatic GoTo to celestial objects, respecting the mount's mechanical limits;
 - a guided startup sequence (phone time + GPS → home on microswitches → ready to track);
@@ -15,10 +15,11 @@ entirely from a phone over **Bluetooth**, with no internet required:
 - optional Stellarium Mobile PLUS / desktop control.
 
 Phones and browsers are fixed: **only stock Safari, Chrome and Firefox** on the phone — no extra
-browser, no native app. **Android** links over **Bluetooth** (Chrome; Firefox has no Web
-Bluetooth). **iPhone** has no Web Bluetooth in any browser (all are WebKit), so it links over
-**the iPhone's own Personal Hotspot**: the ESP32 joins it as a WiFi client; the phone keeps its
-cellular internet and never joins a device network.
+browser, no native app. **Both phones link over WiFi** (no Bluetooth): the ESP32 joins **the
+phone's own hotspot** as a WiFi client, so the phone keeps its cellular internet. When no hotspot
+shows up within ~20 s (an iPhone hotspot may refuse joins without cellular signal), the ESP32 starts
+**its own access point** and the phone joins it, without internet (Own WiFi **Auto**; **On** forces
+the access point, **Off** never starts it; set on the LCD).
 
 Non-goals (for now): ASCOM/INDI drivers of our own (OAT's LX200 over USB already works with
 them), plate solving, autoguiding, a native iOS/Android app.
@@ -26,14 +27,14 @@ them), plate solving, autoguiding, a native iOS/Android app.
 ## 2. System overview
 
 ```
- Phone (PWA)                     ESP32-S3-DevKitC-1                 MKS Robin E3 v1.1 (STM32F103RC)
- ─────────────                   ──────────────────                 ───────────────────────────────
- Android: Chrome  ── BLE ──────► BLE GATT "UART" service  ─UART─►   OAT firmware port (LX200 parser,
-  (app from GitHub Pages)         ↕ byte pipe              USART2     mount model, limits, homing)
- iPhone: Safari ── hotspot ────► WiFi STA on the iPhone's           ├ TMC2209 X  → RA   (NEMA17 0.9°)
-  (app served by the ESP32        hotspot: HTTPS app +              ├ TMC2209 Y  → DEC
-   over HTTPS, WSS link)          WSS byte pipe; LX200 TCP          ├ TMC2209 Z  → AZ    (bipolar 28BYJ-48)
- Phone does: catalog,             :4030 for Stellarium              ├ TMC2209 E  → ALT   (bipolar 28BYJ-48)
+ Phone (PWA)                     ESP32-S3 CAM (on the telescope)    MKS Robin E3 v1.1 (STM32F103RC)
+ ─────────────                   ───────────────────────────────    ───────────────────────────────
+ Safari / Chrome ── WiFi ──────► WiFi STA on the phone's  ─UART─►   OAT firmware port (LX200 parser,
+  (app served by the ESP32        hotspot, or its own       USART2    mount model, limits, homing)
+   over HTTPS, WSS link)          access point (Own WiFi    USB-C   ├ TMC2209 X  → RA   (NEMA17 0.9°)
+                                  Auto/On/Off): HTTPS app   cable   ├ TMC2209 Y  → DEC
+                                  + WSS byte pipe; LX200            ├ TMC2209 Z  → AZ    (bipolar 28BYJ-48)
+ Phone does: catalog,             TCP :4030; camera                 ├ TMC2209 E  → ALT   (bipolar 28BYJ-48)
  ephemerides, RA/Dec↔Az/Alt,                                        │
  GPS + time, plane fetch,                                           ├ ULN2003 A (PB13/PB14/PB15/PA15) → unused
  settings UI (EN/TR)                                                ├ ULN2003 B (PA7/PC4/PC5/PC10) → Focus (stock 28BYJ-48)
@@ -45,8 +46,8 @@ them), plate solving, autoguiding, a native iOS/Android app.
 ```
 
 **Authority split.** The STM32 firmware owns motion, limits, homing and persistent settings — it
-is safe on its own (a dropped BLE link never leaves a slew running unchecked). The phone owns
-astronomy math, catalogs, plane data and UI. The ESP32 is a dumb, transparent bridge so the
+is safe on its own (a dropped WiFi link never leaves a slew running unchecked). The phone owns
+astronomy math, catalogs, plane data and UI. The ESP32 is a dumb bridge (it pipes client bytes and adds only its own `:XN` polls) so the
 firmware protocol stays the single source of truth and USB clients (ASCOM, Stellarium desktop,
 N.I.N.A.) keep working unchanged.
 
@@ -119,8 +120,8 @@ logic lives in `src/core/ui/` (host-tested); the STM32 glue is in `src/adapters/
     both are set) and drops any Sync offset.
   - Go home: `:hF#` goes home and keeps or starts tracking; `:hP#` (the old park) goes home and
     ends untracked. `:hU#` (unpark) only replies `1`.
-- **Settings**: language, minimum altitude, beep, supply voltage (12, 15, 20 or 24 V). RAM-only until the
-  slice 3 settings table persists them.
+- **Settings**: language, minimum altitude, beep, supply voltage (12, 15, 20 or 24 V) and Network (Own
+  WiFi). They are kept across power cycles in the EEPROM store (written on change only, never at boot).
 - **Safety**: any click stops motion; GoTo, Sync and Track need date and time set since boot; a
   driver fault shows a fault page with motors stopped.
 
@@ -155,7 +156,7 @@ Exact bracket geometry is a hardware task once the switches are in hand
 ## 5. Startup sequence
 
 1. Power on → firmware boots, motors disabled, state `UNREADY`.
-2. Phone connects over BLE → sends UTC time, date, UTC offset, latitude, longitude, altitude
+2. Phone connects over WiFi → sends UTC time, date, UTC offset, latitude, longitude, altitude
    (from phone GPS + clock).
 3. User confirms the mount is roughly level and polar-aligned (OAE ALT/AZ adjust) → **Home**:
    RA then DEC seek their microswitches (bounded search, abort on timeout).
@@ -164,32 +165,50 @@ Exact bracket geometry is a hardware task once the switches are in hand
 
 ## 6. ESP32 bridge (`bridge/`)
 
-ESP32-S3-DevKitC-1 (BLE 5, no Bluetooth Classic). Arduino on PlatformIO (FreeRTOS underneath).
-Powered from the board's 5 V (EXP1 pin 10); UART to the STM32 at 3.3 V. Two front-ends feed one
-byte pipe to the firmware (one client at a time owns it; others are refused):
+One **ESP32-S3 CAM** board (8 MB PSRAM) on the telescope does camera and bridge. Arduino on
+PlatformIO (FreeRTOS underneath). It is linked to the Robin's USART2 by a **standard USB-C cable
+that carries serial and the Robin's 5 V, not USB** (two free GPIOs at the ESP32 end, 220 Ω on each
+data line at the Robin end; [wiring.md](wiring.md), safety note in the README). WiFi feeds one byte
+pipe to the firmware (one client at a time owns it; others are refused):
 
-- **BLE** (Android): GATT service with RX (write) and TX (notify) characteristics,
-  Nordic-UART-style UUIDs.
-- **WiFi station on the iPhone's Personal Hotspot** (SSID/password set from the app over USB or
-  BLE once, stored in NVS). Serves the PWA from LittleFS over **HTTPS** and the byte pipe over
-  **WSS** on the same origin. HTTPS is required for GPS and the service worker; it uses a
-  project CA generated once, installed on the iPhone as a configuration profile, and a
-  device certificate for the hotspot address (`172.20.10.x`) / `oae.local`. Same Wi-Fi link
-  also exposes LX200 TCP :4030 for Stellarium Mobile / desktop.
-- Never runs an access point that would take over the phone's WiFi.
+- **Network.** It joins the phone's hotspot as a station (SSID/password stored in NVS). With Own
+  WiFi **Auto** it starts its own access point when no hotspot shows up within ~20 s; **On** always
+  runs the access point, **Off** never does. Both phones are served the same way.
+- Serves the PWA from LittleFS over **HTTPS** and the byte pipe over **WSS** on the same origin.
+  HTTPS is required for GPS and the service worker; it uses a project CA generated once and
+  installed on each phone, and a device certificate for the hotspot / access-point address and
+  `oae.local`. The same link also exposes LX200 TCP :4030 for Stellarium Mobile / desktop.
+- **Status to the Robin (`:XN`).** The Robin stays a plain LX200 command server; the ESP32 polls it
+  about once a second. Every command fits the 31-character LX200 limit:
 
-Open risks (spiked in slice 4): TLS server RAM on the S3 (has 8 MB PSRAM on N8R8 — check the
-module variant), whether the iPhone hotspot stays up with no cellular signal in the field, and
-CORS on the ADS-B APIs from the ESP32 origin.
+  | Command | Meaning | Reply |
+  |---|---|---|
+  | `:XNM<m>,<clients>,<rssi>#` | status: m 0 Off, 1 Hotspot, 2 Own WiFi, 3 Connecting; clients 0..9; rssi -127..0 dBm (0 = unknown) | `1`, `0` if malformed |
+  | `:XNI<a.b.c.d>#` | IPv4 address | `1`, `0` if malformed |
+  | `:XNN<ssid>#` | WiFi name, cut to 20 printable ASCII characters by the ESP32 (it must replace `#`, 0x06 and every other control byte, which the Robin's serial reader would drop or act on, with `?`); spaces are kept | `1` |
+  | `:XNG#` | the Own WiFi choice from the LCD | `0#` Auto, `1#` On, `2#` Off |
+
+  The bridge is not a pure byte pipe: its polls share the stream with client traffic, so it sends one
+  only between complete commands, with one command in flight at a time (the Robin buffers up to `#`,
+  and the `1`/`0` replies have no terminator, so a poll sent mid-command or before a reply has fully
+  arrived would corrupt both). `:XN` is accepted on USB serial too; it is meant for the bridge port
+  only (the values are bounded and only displayed).
+
+  The LCD's Settings > Network page shows the status and **No bridge** after 5 s without `:XNM`.
+  The values are untrusted (the bridge is a trust boundary): the Robin checks digits, ranges and
+  separators strictly and keeps them in fixed buffers.
+
+Open risks (spiked in the bridge slice): CORS on the ADS-B APIs from the ESP32 origin, Android
+Chrome's `.local` resolution, and WiFi throughput with the camera streaming.
 
 ## 7. Phone app (`app/`)
 
-One PWA codebase, two HTTPS origins (HTTPS is needed for GPS and service workers), cached for
+One PWA codebase, served over HTTPS by the ESP32 (HTTPS is needed for GPS and service workers), cached for
 offline use. No framework build step unless it earns its place.
 
 - **Transport** behind one interface (`send(bytes)`, `onData`):
-  - Android / Chrome: Web Bluetooth; app installed from GitHub Pages.
-  - iPhone / Safari: WSS to the ESP32; app installed from the ESP32's HTTPS origin.
+  - Both phones (Chrome, Safari, Firefox): WSS to the ESP32; app installed from the ESP32's HTTPS
+    origin.
 - **Setup:** GPS + time from the phone → firmware; homing; status.
 - **Manual:** jog pad with speed steps per axis, stop button always visible.
 - **GoTo:** offline catalog (bright stars, Messier, bright NGC/IC, named objects) + Sun, Moon
@@ -211,7 +230,7 @@ Each slice is its own feature branch, plan, and release.
 | 2 | `dwin-ui`: Ender 3 V2 screen driver + status, setup wizard, jog, point & track | screen wired (adapter cable) |
 | 3 | `runtime-config`: settings struct + `:XC` commands, ULN2003 driver type, screen settings page | slice 1 |
 | 4 | `homing`: microswitch homing, startup sequence (screen + LX200), end-stop sanity stops | switches mounted |
-| 5 | `esp32-bridge`: BLE ↔ UART, hotspot STA + HTTPS/WSS | ESP32 wired |
-| 6 | `pwa`: connect (BLE + WSS), setup, jog, catalog GoTo, settings, EN/TR, offline | slice 5 |
+| 5 | `esp32-bridge`: ESP32-S3 CAM, hotspot STA or own access point, HTTPS/WSS, `:XN` status | ESP32 wired (USB-C serial cable) |
+| 6 | `pwa`: connect (WSS), setup, jog, catalog GoTo, settings, EN/TR, offline | slice 5 |
 | 7 | `planes`: ADS-B tracking | slice 6 |
 | 8 | `stellarium`: LX200 TCP :4030 on the hotspot link | slice 5 |

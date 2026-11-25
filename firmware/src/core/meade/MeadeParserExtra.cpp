@@ -4,7 +4,7 @@
  *
  * Two-level dispatch: :X<family><leaf-payload> where family is one of
  * FR (factory reset), D (drift alignment), G (Get-leaves), S (Set-leaves),
- * or L (Level-leaves).
+ * L (Level-leaves) or N (network leaves, MeadeParserNetwork.cpp).
  */
 
 #include "MeadeParser.hpp"
@@ -396,6 +396,12 @@ void handleMeadeExtra(MeadeResponse &r, const char *suffix, IMeadeExtraHandlers 
     if (startsWith(suffix, "L"))
     {
         handleExtraLevelLeaf(r, suffix + 1, h);
+        return;
+    }
+
+    if (startsWith(suffix, "N"))
+    {
+        handleMeadeExtraNet(r, suffix + 1, h);
         return;
     }
 }

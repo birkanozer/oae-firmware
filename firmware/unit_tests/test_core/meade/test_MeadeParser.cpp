@@ -116,3 +116,15 @@ TEST(MeadeParser, rejects_unknown_top_level_family)
     EXPECT_EQ('\0', result.family);
     EXPECT_TRUE(result.payload.empty());
 }
+
+TEST(MeadeParser, keeps_spaces_in_the_bridge_ssid)
+{
+    // :XNN carries the WiFi name: its spaces are data. Everything else still loses them.
+    MeadeParseResult result;
+    parseMeadeCommand(":XNNMy iPhone #", result);
+    EXPECT_STREQ("NNMy iPhone ", result.payload.c_str());
+    parseMeadeCommand(": XNN My iPhone#", result);
+    EXPECT_STREQ("NN My iPhone", result.payload.c_str());
+    parseMeadeCommand(":XNM1, 3,-58#", result);
+    EXPECT_STREQ("NM1,3,-58", result.payload.c_str());
+}

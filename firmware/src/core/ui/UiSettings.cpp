@@ -1,4 +1,5 @@
 #include "core/ui/UiSettings.hpp"
+#include <cstring>
 
 namespace core {
 
@@ -10,6 +11,7 @@ const SettingRow kRows[] = {
     {SettingId::MinAlt, TextId::MinAlt, SettingType::Int, -10, 30, 0},
     {SettingId::Beep, TextId::BeepRow, SettingType::Bool, 0, 1, 1},
     {SettingId::Supply, TextId::SupplyRow, SettingType::Enum, 0, 3, 3},
+    {SettingId::OwnWifi, TextId::NetOwnWifi, SettingType::Enum, 0, 2, 0},
 };
 
 static_assert(sizeof(kRows) / sizeof(kRows[0]) == static_cast<unsigned>(SettingId::Count), "kRows must match SettingId");
@@ -31,6 +33,31 @@ void UiSettings::set(SettingId id, int v)
 {
     const SettingRow &r = settingRow(id);
     _v[static_cast<uint8_t>(id)] = static_cast<int8_t>(v < r.min ? r.min : (v > r.max ? r.max : v));
+}
+
+void UiSettings::save(uint8_t *out) const
+{
+    out[0] = kStoreMarker;
+    for (uint8_t i = 0; i < static_cast<uint8_t>(SettingId::Count); ++i)
+        out[1 + i] = static_cast<uint8_t>(_v[i]);
+}
+
+bool UiSettings::load(const uint8_t *in)
+{
+    for (const SettingRow &r : kRows)
+    {
+        const int8_t v = static_cast<int8_t>(in[1 + static_cast<uint8_t>(r.id)]);
+        _v[static_cast<uint8_t>(r.id)] = (in[0] == kStoreMarker && v >= r.min && v <= r.max) ? v : r.def;
+    }
+    return in[0] == kStoreMarker;
+}
+
+bool SettingsStoreLatch::observe(const uint8_t *block)
+{
+    const bool write = _seen && memcmp(block, _last, sizeof _last) != 0;
+    memcpy(_last, block, sizeof _last);
+    _seen = true;
+    return write;
 }
 
 int8_t UiSettings::next(SettingId id) const

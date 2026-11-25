@@ -131,18 +131,25 @@ Pins are defined as upstream `*_DIAG_PIN`s and are not read yet. Today `b_setup`
 `INPUT` (no internal pull-up), so a switch needs an external pull-up until the homing slice sets
 INPUT_PULLUP. PA11/PA12 are also the MCU's USB pins: unused, USB goes via the CH340.
 
-## ESP32-S3 bridge (USART2)
+## ESP32-S3 CAM bridge (USART2, USB-C serial cable)
 
-USART2 (`Serial2`) at 115200 baud.
+USART2 (`Serial2`) at 115200 baud, 3.3 V logic both sides, no level shifter. The ESP32-S3 CAM sits
+on the telescope and is linked to the Robin by a **standard USB-C (USB 2.0) cable** between two
+USB-C breakout boards that join both contact rows (the plug works either way round). The cable
+carries serial and 5 V, **not USB**: see the safety note in the [README](../README.md).
 
-| Robin E3 | Header | ESP32-S3-DevKitC-1 |
+| USB-C line | Robin E3 end | ESP32-S3 CAM end |
 |---|---|---|
-| PA2 (USART2 TX) | NeoPixel header | RX (GPIO 18, set in `bridge/`) |
-| PA3 (USART2 RX) | J24 BLTouch servo (GND, VCC, PA3 ⚠ order) | TX (GPIO 17) |
-| 5 V | EXP1 pin 10 | 5V pin |
-| GND | EXP1 pin 9 | GND |
+| VBUS | 5 V (EXP1 pin 10) | 5V pin |
+| GND | GND (EXP1 pin 9) | GND |
+| D+ | PA2 (USART2 TX), NeoPixel header, through 220 Ω | RX: a free GPIO |
+| D- | PA3 (USART2 RX), J24 BLTouch servo (GND, VCC, PA3 ⚠ order), through 220 Ω | TX: a free GPIO |
 
-3.3 V logic both sides, no level shifter.
+- One 220 Ω series resistor on each data line, at the Robin end.
+- ESP32 end: two free GPIOs, never the board's own USB-C port. They are chosen per board in the
+  bridge slice: on Freenove-style ESP32-S3 CAM boards GPIO 17 and 18 are camera data lines.
+- Power: the Robin's 5 V rail (MP1584, 3 A) feeds the ESP32-S3 CAM (about 0.5 A).
+- The CC1/CC2 pins carry nothing in this link (the breakouts only join the contact rows), so a breakout's own CC resistors do not matter for the serial link. They can make a USB-C charger switch VBUS on if the cable is plugged into one by mistake, which is why the README says never to.
 
 ## Onboard screen (stock Ender 3 LCD ENH12864Z-1) on the "Ender-3 EXP1" header
 

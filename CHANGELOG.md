@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.0] - 2026-11-26
+
+### Added
+
+- LCD Settings > Network page: the ESP32 bridge's mode (Hotspot, Own WiFi, Connecting, Off, or No bridge after 5 s without a status), WiFi name (up to 20 characters), IP address, clients and, in Hotspot mode, the signal; plus the Own WiFi choice (Auto / On / Off), changed with a click. Long press goes back; a click while the mount moves still stops it.
+- LX200 `:XN` commands for the bridge (polled about once a second): `:XNM<mode>,<clients>,<rssi>#` status, `:XNI<a.b.c.d>#` address, `:XNN<name>#` WiFi name (`:XNM` and `:XNI` reply `1`, or `0` when malformed; `:XNN` always `1`), and `:XNG#` returning the Own WiFi choice (`0#` Auto, `1#` On, `2#` Off). Every value is checked strictly; the name is cut to 20 printable characters.
+
+### Changed
+
+- The LCD settings (language, minimum altitude, beep, supply voltage, Own WiFi) are kept across power cycles in their own block of the EEPROM store (AT24C32, flash fallback), written only when a value changes. The stored supply voltage is applied at boot; a blank or invalid store keeps the defaults and `SUPPLY_VOLTAGE`.
+- Both phones link over WiFi (phone hotspot first, the bridge's own access point as fallback); Bluetooth is dropped. One ESP32-S3 CAM on the telescope does camera and bridge, linked to the Robin by a USB-C cable that carries serial, not USB (docs/wiring.md, README safety section).
+
 ## [v0.4.0] - 2026-11-25
 
 ### Added

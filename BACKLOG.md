@@ -6,6 +6,7 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Next
 
+- **v0.5.0 bench test.** Power-cycle: language, min altitude, beep, supply and Own WiFi come back; blank store / `:XFR` loads defaults with no write-back; `:XNM1,2,-60#`, `:XNI…#`, `:XNNMy iPhone#`, `:XNG#` over USART2 with a USB-UART adapter (page shows Hotspot, No bridge after 5 s); the USB-C serial cable (continuity both plug orientations, 220 ohm, ESP32 5 V current).
 - **v0.4.0 bench test.** ALT on the E socket answers at boot (no DRIVER FAULT) and moves in Adjust; AZ and ALT quiet while moving (stealthChop at all speeds); Supply row 12/15/20/24 V. Before wiring the focus ULN2003: meter PC10 (EXP2 7), it may be the SD-card detect line on the board; then check coil order and direction, and that the coils go cold when idle.
 - **Slice 2 bench test (needs the LCD on the Ender-3 header).** Stock 12864 LCD on "Ender-3 EXP1"
   (docs/wiring.md), PSU off while plugging in, then:
@@ -48,10 +49,21 @@ file. Slices and their order: `docs/architecture.md` §8.
 ## Later
 
 - Slice 3 `runtime-config` (settings struct, `:XC` commands).
-- Persist screen settings (slice 3 settings table): language, minimum altitude, beep, supply.
-  RAM-only until then.
 - Slice 4 `homing` (microswitch homing, startup sequence).
-- Slice 5 `esp32-bridge` (BLE + hotspot HTTPS/WSS). Pair with BLE bonding/whitelist: the LX200 parser is a trust boundary.
+- Telescope: National Geographic (Bresser) 76/700 EQ Newtonian, f/9.2, 1.25" focuser; eyepieces 25,
+  12.5, 8 mm; 3x Barlow. Camera plan: OV5640 afocal behind the 12.5 mm (exit pupil 1.4 mm < ~1.5 mm
+  module lens opening: full light, ~f/2.6 effective, ~1 deg field in a ~0.9 deg circle, 1.4"/px) or 8 mm
+  (f/4.1, 0.57 deg circle); 25 mm wastes ~70 %. 12.5 mm + 3x Barlow for Moon/planets. Needs a 3D-printed
+  clamp on the 1.25" eyepiece barrel holding the board centred at eye relief, lens at infinity. Focus
+  presets "Eyepiece"/"Camera" on the focus motor.
+- ALT auto-levelling with an MPU-6050 on the polar axis (I2C, shares PB6/PB7 with the AT24C32;
+  upstream OAT already supports the MPU-6050 and stores its pitch/roll offsets). The phone sends
+  latitude; the firmware moves ALT until the measured polar-axis tilt equals it. Needs a one-time
+  calibration (flip test or the phone's level app), stored on the board. Expected 0.1-0.3 deg after
+  calibration, drifting with temperature: coarse setting only; final polar alignment from the stars
+  (later: camera plate solving). Upgrade path if not enough: Murata SCL3300 inclinometer (SPI, new
+  driver). Azimuth stays manual (magnetometers are useless near steel and motors).
+- Slice 5 `esp32-bridge` (ESP32-S3 CAM: phone hotspot STA or own access point, HTTPS/WSS, `:XN` status polling; Robin side and protocol done). The LX200 parser is a trust boundary.
 - Slice 6 `pwa`, slice 7 `planes`, slice 8 `stellarium`.
 - Small built-in object list on the screen (Messier + bright stars in flash) for GoTo without
   a phone.
@@ -75,12 +87,6 @@ file. Slices and their order: `docs/architecture.md` §8.
 - Other boards (ramps, esp32, rp2040) are not compiled locally after the STM32 changes to shared files
   (`f_serial.hpp`, `MeadeParserSet.cpp`, `SiderealClock.cpp`, `Configuration_adv.hpp`); only native tests and
   `robin_e3` run in the gate. Run them once those toolchains are installed, or rely on upstream CI.
-- iPhone hotspot with no cellular signal in the field: does it stay up? Test before slice 4.
-  2026-11-25: sources say iPhone Personal Hotspot depends on cellular data (may broadcast but refuse
-  joins without it); Android hotspots generally run without signal. Proposed fallback, revisits the
-  "no ESP32 access point" decision: the bridge tries the phone hotspot, and if none appears within
-  ~20 s starts its own access point; camera and phone join it (no internet needed, HTTPS with the
-  project CA unchanged). Weighs toward an S3 bridge (AP + TLS + several clients) over a C3.
 - Camera (2026-11-25): wanted as a live viewer and for long exposures, placed at the eyepiece.
   ESP32 OV-series sensors (OV2640/OV5640) are webcam parts: small pixels, noisy, IR-cut filter, JPEG,
   short maximum exposure (exact limit unchecked, depends on the sensor driver), so live view of
@@ -99,10 +105,6 @@ file. Slices and their order: `docs/architecture.md` §8.
   exposure the esp32-camera driver allows (low XCLK/PCLK, long VTS), RAW noise, and live-stack ~100
   frames on a bright DSO (M42, M13). Also try a UVC low-light camera (IMX291/IMX462) on the S3's USB
   host (full-speed only, may not enumerate). Decide the camera from the measurements.
-  Split idea (2026-11-25): bridge = cheap ESP32-C3 module (e.g. "C3 SuperMini", WiFi + BLE 5, no PSRAM)
-  wired to J24 at the Robin, LX200 byte pipe only; camera = its own board at the focuser, power-only
-  cable, WiFi to the phone. Check the C3 has RAM for the iPhone HTTPS/WSS server (mbedTLS per session)
-  before committing; the S3 is the fallback bridge.
   Camera features to plan (2026-11-25): three modes switched from the app. (1) Live view: JPEG stream,
   ~15-30 fps at 640x480, slower at higher resolution; at night frame rate = 1/exposure. (2) Focus aid:
   full-resolution crop around a star with a star-width (HFD/FWHM) number, driving the Focus motor
@@ -114,7 +116,7 @@ file. Slices and their order: `docs/architecture.md` §8.
   HTTPS/WSS with the project CA (an HTTPS page cannot load a plain-HTTP stream).
   Network: everything joins the phone's hotspot. ESP32 is 2.4 GHz only (iPhone: "Maximize
   Compatibility" on); iPhone hotspot switches off with no clients, so bridge and camera auto-reconnect;
-  Android Chrome resolves .local poorly, so discovery needs a fallback. The camera needs WiFi on Android
-  too, so revisit the Web Bluetooth path (keep as fallback or drop). Stellarium (mobile or desktop on
+  Android Chrome resolves .local poorly, so discovery needs a fallback. Web Bluetooth is dropped (both
+  phones over WiFi, one ESP32-S3 CAM does camera and bridge: CLAUDE.md Decisions). Stellarium (mobile or desktop on
   the same hotspot) talks LX200 over TCP to the bridge; the bridge must serialise commands from several
   clients (app + Stellarium), one command in flight.

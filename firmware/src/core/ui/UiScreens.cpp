@@ -263,6 +263,7 @@ uint8_t UiController::items(Item *out) const
             add(t(TextId::BeepRow), t(_settings.get(SettingId::Beep) ? TextId::On : TextId::Off), false);
             snprintf(v, sizeof v, "%d V", supplyVolts());
             add(t(TextId::SupplyRow), v, false);
+            add(t(TextId::NetworkRow), nullptr, false);  // kNetworkRow
             break;
         case Screen::AdjustOptions:
             stepText(v, sizeof v);
@@ -405,6 +406,11 @@ void UiController::clickSettings(uint8_t r)
     {
         _sel = 0;
         _screen = Screen::Setup;
+        return;
+    }
+    if (r == kNetworkRow)
+    {
+        _screen = Screen::Network;
         return;
     }
     const SettingId id = static_cast<SettingId>(r - 1);
@@ -667,6 +673,40 @@ void UiController::renderRefused(Canvas &c) const
     c.frame(1, 42, 126, 52);
     center(c, Font::F6x10, 43, t(why), false);
     footer(c, t(TextId::FootEdit));
+}
+
+// Network: mode, name (up to 20 characters, a line of its own), address, clients (+ signal in Hotspot mode), and the
+// Own WiFi choice as the click bar. Name, address and clients only while the bridge reports.
+void UiController::renderNetwork(Canvas &c) const
+{
+    static const TextId kModes[] = {TextId::Off, TextId::NetHotspot, TextId::NetOwnWifi, TextId::NetConnecting};
+    static const TextId kOwn[] = {TextId::Auto, TextId::On, TextId::Off};
+    const NetStatus &n = _m.net;
+    const bool up = n.seen && within(_now, n.atMs, kNoBridgeMs);
+    char l[48];
+    header(c, t(TextId::HdrNetwork), nullptr);
+    snprintf(l, sizeof l, "%s: %s", t(TextId::ModeRow), t(!up ? TextId::NetNoBridge : kModes[n.mode < 4 ? n.mode : 0]));
+    c.text(Font::F6x10, 0, 13, l, false);
+    if (up)
+    {
+        snprintf(l, sizeof l, "%.20s", n.ssid);
+        c.text(Font::F6x10, 0, 23, l, false);
+        if (n.ip[0] | n.ip[1] | n.ip[2] | n.ip[3])
+            snprintf(l, sizeof l, "IP: %u.%u.%u.%u", n.ip[0], n.ip[1], n.ip[2], n.ip[3]);
+        else
+            snprintf(l, sizeof l, "IP: -");
+        c.text(Font::F6x10, 0, 33, l, false);
+        if (n.mode == 1 && n.rssi < 0)
+            snprintf(l, sizeof l, "%s: %u  %d dBm", t(TextId::NetClients), n.clients % 10u, (int)n.rssi);
+        else
+            snprintf(l, sizeof l, "%s: %u", t(TextId::NetClients), n.clients % 10u);
+        c.text(Font::F6x10, 0, 43, l, false);
+    }
+    snprintf(l, sizeof l, "%s: %s", t(TextId::NetOwnWifi), t(kOwn[_settings.get(SettingId::OwnWifi)]));
+    if (moving() || messageActive())
+        footer(c, "");
+    else
+        bar(c, 53, 63, 54, l);
 }
 
 void UiController::renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const

@@ -6,10 +6,10 @@
 > (MIT, © OpenAstroTech contributors). For the official firmware and support, go there.
 
 Firmware and a phone app that run an **OpenAstroExplorer (OAE)** mount from an **MKS Robin E3
-v1.1** board (STM32F103RC, onboard TMC2209). An **ESP32-S3** bridges the board to the phone: over
-Bluetooth on Android (Chrome), over the iPhone's own Personal Hotspot on iPhone (Safari). The app
-works with no internet: GoTo from an offline catalog, planets computed on the phone, manual jog,
-guided startup with microswitch homing, and every motor and gear setting editable and saved on
+v1.1** board (STM32F103RC, onboard TMC2209). An **ESP32-S3 CAM** on the telescope bridges the board
+to the phone over WiFi: it joins the phone's own hotspot, or starts its own access point when there
+is none. The app works with no internet: GoTo from an offline catalog, planets computed on the
+phone, manual jog, guided startup with microswitch homing, and every motor and gear setting editable and saved on
 the board. With internet it can also track planes from free ADS-B data.
 
 Design and roadmap: [docs/architecture.md](docs/architecture.md). Wiring:
@@ -20,7 +20,7 @@ Design and roadmap: [docs/architecture.md](docs/architecture.md). Wiring:
 | Folder | What |
 |---|---|
 | `firmware/` | OAT firmware fork, STM32 port (PlatformIO, Arduino/STM32duino) |
-| `bridge/` | ESP32-S3 BLE / hotspot bridge (PlatformIO, Arduino) |
+| `bridge/` | ESP32-S3 CAM WiFi bridge: phone hotspot or own access point (PlatformIO, Arduino) |
 | `app/` | Phone PWA (English / Turkish) |
 | `hardware/` | Printed parts: endstop brackets and cams |
 | `backup/` | Factory flash image of the board (git-ignored) |
@@ -71,8 +71,28 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   returns to the editor with the values kept.
 - **Settings** has language (EN/TR), minimum altitude, beep, and supply (12, 15, 20 or 24 V,
   default 24 V; 15 V suits USB-PD power banks). Supply sets the TMC2209 starting values and caps slew
-  speed at 70 % on 12 V and 87.5 % on 15 V (full speed from 20 V). Screen settings reset at boot until
-  settings storage lands (slice 3).
+  speed at 70 % on 12 V and 87.5 % on 15 V (full speed from 20 V). Language, minimum altitude, beep,
+  supply and Own WiFi are kept across power cycles; date and time are not (no clock battery), they come
+  from the phone or the LCD.
+- **Settings > Network** shows what the ESP32 bridge reports: mode (Hotspot, Own WiFi, Connecting,
+  Off, or No bridge when it has been silent for 5 s), WiFi name, IP address, clients and, in Hotspot
+  mode, the signal. Click to change **Own WiFi**: Auto (own access point when no phone hotspot shows
+  up within about 20 s), On (always its own access point) or Off (phone hotspot only).
+
+## Robin to ESP32 cable: not USB
+
+The Robin and the ESP32-S3 CAM are linked by an ordinary USB-C cable, but it carries the board's
+serial port and 5 V, **not USB** (pins in [docs/wiring.md](docs/wiring.md)).
+
+- **Never plug it into a computer, phone, charger or power bank.** That ties their 5 V to the
+  Robin's 5 V rail and puts USB signals on the board's serial pins.
+- **Never plug the cable into the ESP32 board's own USB-C port**, and unplug the link cable before
+  connecting that port to a computer to flash it: the cable ties the Robin's 5 V to the ESP32's 5V pin,
+  which on most boards is also that port's VBUS.
+- **Label both sockets** (for example "OAE LINK, NOT USB"), on the Robin side and on the ESP32 side.
+- The 220 Ω resistors on the data lines limit the damage from a mistaken plug; they do not make it
+  safe.
+- **Power the Robin off** before connecting or disconnecting the cable.
 
 ## Motor noise (TMC2209)
 

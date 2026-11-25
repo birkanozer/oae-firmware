@@ -652,6 +652,37 @@
 //      Returns:
 //        "1#"
 //
+// :XNMm,c,r#
+//      Description:
+//        Network status from the ESP32 bridge (OAE fork)
+//      Information:
+//        m is the mode (0 Off, 1 Hotspot, 2 Own WiFi, 3 Connecting), c the connected clients (0..9) and r the
+//        signal in dBm (-127..0, 0 = unknown). Shown on the LCD's Settings > Network page, which says "No bridge"
+//        after 5 seconds without one. The values are checked strictly; anything malformed is refused.
+//      Returns:
+//        "1" if accepted, "0" if malformed (no # terminator)
+//
+// :XNIa.b.c.d#
+//      Description:
+//        The bridge's IPv4 address (OAE fork)
+//      Returns:
+//        "1" if accepted, "0" if malformed (no # terminator)
+//
+// :XNNssid#
+//      Description:
+//        The bridge's WiFi name (OAE fork)
+//      Information:
+//        At most 20 printable ASCII characters, spaces are kept. The serial reader drops bytes below 0x20 and
+//        takes 0x06 for ACK, and '#' ends the command, so the bridge must replace those before sending.
+//      Returns:
+//        "1" (always, no # terminator)
+//
+// :XNG#
+//      Description:
+//        Get the Own WiFi setting chosen on the LCD (OAE fork)
+//      Returns:
+//        "0#" Auto, "1#" On, "2#" Off
+//
 // :XDnnn#
 //      Description:
 //        Run drift alignment (only supported if SUPPORT_DRIFT_ALIGNMENT is enabled)

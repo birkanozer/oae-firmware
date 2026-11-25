@@ -161,6 +161,10 @@ class MeadeCommandProcessor : private oat::core::meade::IMeadeHandlers
     void onLevelSetReferenceRoll(float v) override;
     void onLevelStartup() override;
     void onLevelShutdown() override;
+    void onNetStatus(uint8_t mode, uint8_t clients, int8_t rssi) override;
+    void onNetIp(const uint8_t ip[4]) override;
+    void onNetName(const char *ssid) override;
+    uint8_t onNetOwnWifi() override;
 
     Mount *_mount;
     LcdMenu *_lcdMenu;

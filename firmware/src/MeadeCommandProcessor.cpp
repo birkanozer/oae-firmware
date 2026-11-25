@@ -7,6 +7,9 @@
 #include "WifiControl.hpp"
 #include "Gyro.hpp"
 #include "core/meade/MeadeParser.hpp"
+#if USE_LCD_UI == 1
+    #include "adapters/LcdUi.hpp"
+#endif
 
 #include <stdarg.h>
 #include <string.h>
@@ -439,6 +442,9 @@ bool MeadeCommandProcessor::onIsSlewingRaOrDec()
 void MeadeCommandProcessor::onFactoryReset()
 {
     _mount->clearConfiguration();
+#if USE_LCD_UI == 1
+    lcdUiReloadSettings();  // the LCD keeps its own copy of the Settings: it must not write it back
+#endif
 }
 
 void MeadeCommandProcessor::onDriftAlignment(int duration)
@@ -734,6 +740,52 @@ void MeadeCommandProcessor::onLevelShutdown()
 {
 #if USE_GYRO_LEVEL == 1
     Gyro::shutdown();
+#endif
+}
+
+// :XN: the ESP32 bridge reports its WiFi (values already validated by the parser); shown on the LCD's Network page.
+void MeadeCommandProcessor::onNetStatus(uint8_t mode, uint8_t clients, int8_t rssi)
+{
+#if USE_LCD_UI == 1
+    ::core::NetStatus &n = lcdUiNet();
+    n.mode               = mode;
+    n.clients            = clients;
+    n.rssi               = rssi;
+    n.atMs               = millis();
+    n.seen               = true;
+#else
+    (void) mode;
+    (void) clients;
+    (void) rssi;
+#endif
+}
+
+void MeadeCommandProcessor::onNetIp(const uint8_t ip[4])
+{
+#if USE_LCD_UI == 1
+    memcpy(lcdUiNet().ip, ip, sizeof lcdUiNet().ip);
+#else
+    (void) ip;
+#endif
+}
+
+void MeadeCommandProcessor::onNetName(const char *ssid)
+{
+#if USE_LCD_UI == 1
+    ::core::NetStatus &n = lcdUiNet();
+    strncpy(n.ssid, ssid, sizeof n.ssid - 1);
+    n.ssid[sizeof n.ssid - 1] = '\0';
+#else
+    (void) ssid;
+#endif
+}
+
+uint8_t MeadeCommandProcessor::onNetOwnWifi()
+{
+#if USE_LCD_UI == 1
+    return lcdUiOwnWifi();
+#else
+    return 0;  // Auto
 #endif
 }
 
