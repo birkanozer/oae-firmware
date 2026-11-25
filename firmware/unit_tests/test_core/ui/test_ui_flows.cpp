@@ -943,12 +943,35 @@ TEST(UiFlowsTest, SupplyRowEmitsAction)
     bool f;
     UiAction a = get(u, Kind::SetSupplyVoltage, f);
     ASSERT_TRUE(f);
-    EXPECT_EQ(12, a.a);
-    u.m.supplyVoltage = 12;
+    EXPECT_EQ(12, a.a);  // from the default 24 V it wraps to 12 V
+    // 12 -> 15 -> 20 -> 24 -> 12, each step from the value the firmware reports
+    const int volts[] = {12, 15, 20, 24};
+    for (int i = 0; i < 4; ++i)
+    {
+        u.m.supplyVoltage = static_cast<uint8_t>(volts[i]);
+        u.tick(10);
+        EXPECT_TRUE(u.drew(row("Supply", std::to_string(volts[i]) + " V").c_str())) << volts[i];
+        u.click();
+        a = get(u, Kind::SetSupplyVoltage, f);
+        ASSERT_TRUE(f);
+        EXPECT_EQ(volts[(i + 1) % 4], a.a);
+    }
+    EXPECT_EQ(0, u.c.violations);
+}
+
+TEST(UiFlowsTest, SupplyRowUnknownVoltageGoesTo12)
+{
+    Ui u;
+    u.m.supplyVoltage = 18;  // not a choice: treated as 24, the next is 12
+    u.tick();
+    menu(u, 3);
+    u.turn(4);
+    u.actions();
     u.click();
-    a = get(u, Kind::SetSupplyVoltage, f);
+    bool f;
+    const UiAction a = get(u, Kind::SetSupplyVoltage, f);
     ASSERT_TRUE(f);
-    EXPECT_EQ(24, a.a);
+    EXPECT_EQ(12, a.a);
 }
 
 TEST(UiFlowsTest, SupplyRowShowsSnapshotValue)
@@ -1499,6 +1522,99 @@ TEST(UiFlowsTest, AdjustRefusesFailedDriver)
     v.turn(-1);
     EXPECT_FALSE(Ui::has(v.actions(), Kind::MoveSteps));
     EXPECT_TRUE(v.drew("DRIVER FAULT"));
+}
+
+TEST(UiFlowsTest, AdjustCyclesAltInDisplayOrder)
+{
+    struct Case
+    {
+        bool az, alt, focus;
+        std::vector<const char *> order;  // after RA, one click each
+    };
+    const Case cases[] = {
+        {true, true, true, {"DEC", "AZ", "ALT", "FOCUS", "RA"}},
+        {false, true, true, {"DEC", "ALT", "FOCUS", "RA"}},
+        {true, true, false, {"DEC", "AZ", "ALT", "RA"}},
+        {false, true, false, {"DEC", "ALT", "RA"}},
+        {true, false, true, {"DEC", "AZ", "FOCUS", "RA"}},
+        {false, false, false, {"DEC", "RA"}},
+    };
+    for (const Case &k : cases)
+    {
+        Ui u;
+        u.m.hasAz = k.az;
+        u.m.hasAlt = k.alt;
+        u.m.hasFocus = k.focus;
+        u.tick();
+        adjust(u);
+        EXPECT_TRUE(u.inv("RA"));
+        EXPECT_EQ(k.alt, u.drew("ALT"));  // the strip lists ALT only when fitted
+        for (const char *ax : k.order)
+        {
+            u.click();
+            EXPECT_TRUE(u.inv(ax)) << ax;
+        }
+        EXPECT_EQ(0, u.c.violations);  // five axes fit the strip
+    }
+}
+
+TEST(UiFlowsTest, AdjustAltMovesAxis4AndItsFaultLocksOnlyAlt)
+{
+    Ui u;
+    u.m.hasAz = u.m.hasAlt = true;
+    u.m.altFault = true;
+    u.tick();
+    adjust(u);
+    clicks(u, 3);  // RA -> DEC -> AZ -> ALT
+    ASSERT_TRUE(u.inv("ALT"));
+    u.actions();
+    u.turn(1);
+    const auto refused = u.actions();
+    EXPECT_TRUE(Ui::has(refused, Kind::BeepError));
+    EXPECT_FALSE(Ui::has(refused, Kind::MoveSteps));
+    EXPECT_TRUE(u.drew("ALT DRIVER FAULT"));
+    u.tick(2100);
+    u.click();  // ALT -> RA: still moves
+    u.actions();
+    u.turn(1);
+    bool f;
+    UiAction a = get(u, Kind::MoveSteps, f);
+    EXPECT_TRUE(f);
+    EXPECT_EQ(0, a.b);
+    u.tick(400);  // past the step latch
+    clicks(u, 2);  // RA -> DEC -> AZ: still moves
+    ASSERT_TRUE(u.inv("AZ"));
+    u.actions();
+    u.turn(1);
+    a = get(u, Kind::MoveSteps, f);
+    EXPECT_TRUE(f);
+    EXPECT_EQ(2, a.b);
+    u.tick(400);
+    u.m.altFault = false;  // a healthy ALT moves as axis 4
+    u.click();
+    ASSERT_TRUE(u.inv("ALT"));
+    u.actions();
+    u.turn(-1);
+    a = get(u, Kind::MoveSteps, f);
+    EXPECT_TRUE(f);
+    EXPECT_EQ(4, a.b);
+    EXPECT_EQ(-100, a.a);
+}
+
+TEST(UiFlowsTest, AdjustShowsAltPositionAndDegrees)
+{
+    Ui u;
+    u.m.hasAlt = true;
+    u.m.stepsPerDeg[4] = 1000.0f;
+    u.m.axisPos[4] = 4242;
+    u.tick();
+    adjust(u);
+    setStep(u, 3);
+    clicks(u, 2);  // RA -> DEC -> ALT
+    ASSERT_TRUE(u.inv("ALT"));
+    EXPECT_TRUE(contains(u, "4242"));
+    EXPECT_TRUE(contains(u, "1.00"));
+    EXPECT_EQ(0, u.c.violations);
 }
 
 TEST(UiFlowsTest, SyncOnTargetNeedsTargetAndClock)

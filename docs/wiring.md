@@ -19,12 +19,11 @@ Timers: stepper ISR on TIM6 at the lowest interrupt priority; TMC SoftwareSerial
 |---|---|---|---|---|---|
 | X | RA | PC0 | PB2 | PC13 | PC7 |
 | Y | DEC | PC2 | PB9 | PB12 | PD2 |
-| Z | AZ (example config) or ALT | PC14 ⚠ | PC15 ⚠ | PB8 ⚠ | PC12 |
-| E | Focus (example config) | PB4 | PB3 | PB5 | PC11 |
+| Z | AZ | PC14 ⚠ | PC15 ⚠ | PB8 ⚠ | PC12 |
+| E | ALT | PB4 | PB3 | PB5 | PC11 |
 
-The Z socket carries AZ in the example config (`AZ_STEP_PIN` = `ALT_STEP_PIN` and so on) or ALT, never
-both: the pins file stops the build with `#error` if both are enabled. ALT stays off. The E socket
-carries the focuser in the example config.
+The Z socket carries AZ and the E socket carries ALT, both bipolar-modded 28BYJ-48 (below). The focuser
+is not on a socket: it is a stock 28BYJ-48 on a ULN2003 board (ULN group B, below).
 
 Motor connectors XH2.54-4P (Ender-3 order ⚠).
 
@@ -37,22 +36,45 @@ pins 6–8 (PA7, PC4, PC5) are available here, as ULN group B; 9/10 are GND and 
 
 | Group | IN1 | IN2 | IN3 | IN4 | Power |
 |---|---|---|---|---|---|
-| A (AZ) | PB13 (EXP2 2) | PB14 (EXP2 1) | PB15 (EXP2 6) | PA15 (EXP2) | ULN 5 V + GND from EXP1 9/10 |
+| A (unused) | PB13 (EXP2 2) | PB14 (EXP2 1) | PB15 (EXP2 6) | PA15 (EXP2) | ULN 5 V + GND from EXP1 9/10 |
 | B (focus) | PA7 (6) | PC4 (7) | PC5 (8) | PC10 (EXP2 7) | same |
 
 The 5 V rail on EXP1 is the board's buck output (MP1584, 3 A); two 28BYJ-48 draw ~240 mA each
 at 5 V. 3.3 V logic drives the ULN2003 inputs fine. **PA15 and PB3/PB4 are JTAG pins at reset:
 firmware disables JTAG and keeps SWD.**
 
-## Focus motor: bipolar-modded 28BYJ-48 on the E socket (TMC2209, UART)
+## Focus motor: stock 28BYJ-48 on a ULN2003 board (ULN group B)
+
+The unmodified (unipolar, five-wire) 28BYJ-48 plugs into its ULN2003 board as shipped. Wire the
+board to ULN group B:
+
+| ULN2003 board | Robin E3 | Header pin |
+|---|---|---|
+| IN1 | PA7 | EXP1 6 |
+| IN2 | PC4 | EXP1 7 |
+| IN3 | PC5 | EXP1 8 |
+| IN4 | PC10 | EXP2 7 |
+| + (5-12 V) | 5 V | EXP1 10 |
+| - | GND | EXP1 9 |
+
+`FOCUS_DRIVER_TYPE DRIVER_TYPE_ULN2003`: half steps (AccelStepper `HALF4WIRE`, coils driven in the
+order IN1, IN3, IN2, IN4), 4096 half steps per output turn, 800 half steps/s, 1000/s^2 (the motor at
+5 V stalls near 1000/s). All four pins go low when the focuser is idle (`FOCUSER_ALWAYS_ON 0`). There
+is no UART, no current setting and no fault detection: a focus move is never refused. If the motor
+only hums, check the IN1..IN4 order first; if it turns the wrong way, swap IN1 with IN4 and IN2 with
+IN3.
+
+## ALT motor: bipolar-modded 28BYJ-48 on the E socket (TMC2209, UART)
 
 Same motor mod, coil pairs (find them by continuity), current formula and safety rules as the AZ
-motor below, on the E socket (PB4 step, PB3 dir, PB5 EN, PC11 UART). Peak 150 mA = about 91 mA RMS
-(`FOCUS_MOTOR_CURRENT_RATING` is a peak value, RMS = rating x `FOCUS_OPERATING_CURRENT_SETTING` % / 1.414),
-hold 30 % (`FOCUSER_MOTOR_HOLD_SETTING`), released when idle (`FOCUSER_ALWAYS_ON 0`). EN stays high until
-the UART current is set. If the focus UART does not answer at boot, every focus move is refused
-(no motion, no position change). `UART_CONNECTION_TEST_TXRX 1` is mandatory (`#error` otherwise).
-2048 steps per turn, 16 microsteps, 400 full steps/s and 200 full steps/s^2.
+motor below, on the E socket (PB4 step, PB3 dir, PB5 EN, PC11 UART, address 0). Peak 150 mA = about
+91 mA RMS (`ALT_MOTOR_CURRENT_RATING` is a peak value, RMS = rating x `ALT_OPERATING_CURRENT_SETTING` % / 1.414),
+hold 30 % (`ALT_MOTOR_HOLD_SETTING`), released when idle (`ALT_ALWAYS_ON 0`), coil resistance
+`ALT_COIL_RESISTANCE_OHM` (default 50 ohm). EN stays high until the UART current is set. If the ALT
+UART does not answer at boot, every ALT move is refused (no motion, no position change).
+`UART_CONNECTION_TEST_TXRX 1` is mandatory (`#error` otherwise). 2048 steps per turn, 16 microsteps,
+400 full steps/s and 200 full steps/s^2; steps per degree from upstream's OAE ALT formula (130 mm
+radius, 1.25 mm rod pitch). Same quiet TMC settings as AZ.
 
 ## AZ motor: bipolar-modded 28BYJ-48 on the Z socket (TMC2209, UART)
 
@@ -67,7 +89,7 @@ the other pair to B1/B2. If the motor only shakes or turns the wrong way, swap t
 one coil (reverses direction) or recheck the pairing. Write the measured pair resistance down:
 it is `AZ_COIL_RESISTANCE_OHM` (default 50 Ω for R_half of about 25 Ω).
 
-**Current.** A current-chopping driver sets the coil current itself, so the 5 V motor on 12 or
+**Current.** A current-chopping driver sets the coil current itself, so the 5 V motor on 12 to
 24 V is fine once the UART current is applied. The firmware keeps EN high (driver off) until
 the UART current is set. If the AZ UART does not answer at boot, AZ stays disabled and every AZ
 move is refused (no motion, no position change), so it never runs on the board's VREF current.
@@ -84,9 +106,9 @@ move is refused (no motion, no position change), so it never runs on the board's
   RMS requested) therefore lands on **91 mA RMS**. Pick a request that falls inside the bin you want.
 - Hold is 30 % (`AZ_MOTOR_HOLD_SETTING`, rounds to IHOLD 0 here) and `AZ_ALWAYS_ON 0` releases EN
   when the axis is idle, so nothing is powered at rest. The motor can still run warm during moves.
-
-**ULN2003 alternative** (the stock board, no cut; firmware driver is a later slice): use the
-EXP1/EXP2 table above.
+- Quiet settings like RA and DEC: stealthChop, PWM at 47 kHz (`TMC_PWM_FREQ`), TOFF 3 with TBL 2
+  (`TMC_TOFF`), current ramp-down `TMC_IHOLDDELAY` / `TMC_TPOWERDOWN`, stealthChop at all
+  speeds (no `TMC_TPWMTHRS`).
 
 **SoftwareSerial and the E socket's UART (PC11).** PC11 shares EXTI line 11 with knob A (PB11),
 but STM32duino SoftwareSerial does not use `attachInterrupt` on the RX pin: it samples the pin
@@ -101,7 +123,7 @@ line 12 with the RA endstop PA12, and also does not use EXTI.
 | X- | PA12 | RA home |
 | Y- | PA11 | DEC home |
 | Z- | PC6 | AZ home |
-| Z+ / probe | PB1 | spare (ALT home or RA hard limit) |
+| Z+ / probe | PB1 | spare (ALT home or RA hard limit; `ALT_DIAG_PIN`) |
 
 Wire switch between signal and GND. Treat inputs as 3.3 V.
 
@@ -157,5 +179,5 @@ filament-runout input is unused).
 
 - USB (mini-B) → CH340 → USART1 PA9/PA10 (`Serial`, 19200): LX200 for ASCOM / Stellarium desktop / debug.
 - AT24C32 EEPROM on I²C PB6 SCL / PB7 SDA ⚠ (verify by I²C scan).
-- Power input 12–24 V. Unused: heaters PC8/PC9, fan PA8, thermistors PA0/PA1, runout PB10,
+- Power input 12–24 V; set Settings > Supply (12, 15, 20 or 24 V) to match. Unused: heaters PC8/PC9, fan PA8, thermistors PA0/PA1, runout PB10,
   SD on SPI2 (EXP2).

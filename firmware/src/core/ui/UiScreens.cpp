@@ -369,7 +369,7 @@ void UiController::turnAdjust(int8_t detents, uint32_t nowMs)
     if (axisFaulted())
     {
         push(UiAction::Kind::BeepError);
-        showMessage(TextId::FaultDriver, kMessageMs, nowMs);
+        showMessage(_axis == 4 ? TextId::FaultAlt : TextId::FaultDriver, kMessageMs, nowMs);
         return;
     }
     push(UiAction::Kind::MoveSteps, detents * kStepSizes[_stepSel], _axis);
@@ -413,11 +413,14 @@ void UiController::clickSettings(uint8_t r)
         case SettingId::MinAlt:
             openEditor(Edit::MinAlt, _settings.get(id));
             break;
-        case SettingId::Supply:  // the row shows the firmware's value once it applied the change
+        case SettingId::Supply:  // next choice; the row shows the firmware's value once it applied the change
         {
-            const int volts = supplyVolts() == 24 ? 12 : 24;
-            _settings.set(id, volts == 24);
-            push(UiAction::Kind::SetSupplyVoltage, volts);
+            int i = 0;  // a value that is not a choice counts as the last one (24 V)
+            while (i < 3 && kSupplyVolts[i] != supplyVolts())
+                ++i;
+            i = (i + 1) % 4;
+            _settings.set(id, i);
+            push(UiAction::Kind::SetSupplyVoltage, kSupplyVolts[i]);
             break;
         }
         default:
@@ -596,16 +599,16 @@ void UiController::stepText(char *out, size_t n) const
         snprintf(out, n, "%d", (int)kStepSizes[_stepSel]);
 }
 
-// Adjust: axis (header), the axis strip, position, step size with its degrees (RA, DEC, AZ; Focus has steps only).
+// Adjust: axis (header), the axis strip, position, step size with its degrees (RA, DEC, AZ, ALT; Focus has steps only).
 void UiController::renderAdjust(Canvas &c) const
 {
     char l[48], v[24];
-    const TextId names[4] = {TextId::LabelRa, TextId::LabelDec, TextId::LabelAz, TextId::AxisFocus};
+    const TextId names[kAxes] = {TextId::LabelRa, TextId::LabelDec, TextId::LabelAz, TextId::AxisFocus, TextId::LabelAlt};
     header(c, t(TextId::HdrAdjust), t(names[_axis]));
     snprintf(l, sizeof l, "%s %ld", t(TextId::PosRow), (long)_m.axisPos[_axis]);
     c.text(Font::F6x10, 0, 13, l, false);
     stepText(v, sizeof v);
-    if (_stepSel < kJogFirst && _axis < 3 && _m.stepsPerDeg[_axis] > 0.0f)
+    if (_stepSel < kJogFirst && _m.stepsPerDeg[_axis] > 0.0f)
     {
         const float deg = kStepSizes[_stepSel] / _m.stepsPerDeg[_axis];
         const long d100 = lroundf(deg * 100.0f);
@@ -621,17 +624,18 @@ void UiController::renderAdjust(Canvas &c) const
     else
         snprintf(l, sizeof l, "%s", v);
     c.text(Font::F6x10, 0, 23, l, false);
-    int16_t x = 2;  // the axes in use, the selected one inverted
-    for (uint8_t a = 0; a < 4; ++a)
+    int16_t x = 2;  // the axes in use in display order, the selected one inverted; 8 px gaps fit all five
+    for (uint8_t i = 0; i < kAxes; ++i)
     {
-        if ((a == 2 && !_m.hasAz) || (a == 3 && !_m.hasFocus))
+        const uint8_t a = kAxisOrder[i];
+        if (!axisFitted(a))
             continue;
         const char *name = t(names[a]);
         const int16_t w = static_cast<int16_t>(6 * cols(name));
         if (a == _axis)
             c.box(static_cast<int16_t>(x - 1), 32, static_cast<int16_t>(x + w), 41);
         c.text(Font::F6x10, x, 33, name, a == _axis);
-        x = static_cast<int16_t>(x + w + 12);
+        x = static_cast<int16_t>(x + w + 8);
     }
     footer(c, t(TextId::FootAdjust));
 }

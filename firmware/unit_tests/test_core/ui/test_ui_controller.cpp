@@ -665,7 +665,12 @@ TEST(UiControllerTest, SnapshotDefaultsHaveNoAzFocus)
     const core::MountSnapshot s{};
     EXPECT_FALSE(s.hasAz);
     EXPECT_FALSE(s.hasFocus);
-    for (int i = 0; i < 4; i++)
+    EXPECT_FALSE(s.hasAlt);
+    EXPECT_FALSE(s.altFault);
+    for (int i = 0; i < 5; i++)
+    {
         EXPECT_EQ(s.axisPos[i], 0);
+        EXPECT_EQ(s.stepsPerDeg[i], 0.0f);
+    }
     EXPECT_GT(static_cast<int>(core::UiAction::Kind::MoveSteps), static_cast<int>(core::UiAction::Kind::SetSupplyVoltage));
 }

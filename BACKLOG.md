@@ -6,6 +6,7 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Next
 
+- **v0.4.0 bench test.** ALT on the E socket answers at boot (no DRIVER FAULT) and moves in Adjust; AZ and ALT quiet while moving (stealthChop at all speeds); Supply row 12/15/20/24 V. Before wiring the focus ULN2003: meter PC10 (EXP2 7), it may be the SD-card detect line on the board; then check coil order and direction, and that the coils go cold when idle.
 - **Slice 2 bench test (needs the LCD on the Ender-3 header).** Stock 12864 LCD on "Ender-3 EXP1"
   (docs/wiring.md), PSU off while plugging in, then:
   1. Boot: status screen appears. If blank or garbled, check the cable key and try a slower U8g2
@@ -46,7 +47,7 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Later
 
-- Slice 3 `runtime-config` (settings struct, `:XC` commands, ULN2003 driver type).
+- Slice 3 `runtime-config` (settings struct, `:XC` commands).
 - Persist screen settings (slice 3 settings table): language, minimum altitude, beep, supply.
   RAM-only until then.
 - Slice 4 `homing` (microswitch homing, startup sequence).
@@ -54,14 +55,11 @@ file. Slices and their order: `docs/architecture.md` §8.
 - Slice 6 `pwa`, slice 7 `planes`, slice 8 `stellarium`.
 - Small built-in object list on the screen (Messier + bright stars in flash) for GoTo without
   a phone.
-- Focuser 28BYJ-48 + ULN2003 (hardware arriving later).
-- Optional ALT motor on a free TMC2209 socket.
 
 ## Plans
 
 ## Bugs
 
-- AZ driver has no TMC quiet settings (stealthChop/PWM_FREQ/TOFF) like RA/DEC/Focus; may whine when it moves. Check on the bench.
 - Step move during a GoTo started from idle makes the GoTo end idle (accepted in point-adjust).
 
 - `robin_e3` core runs at 64 MHz (measured over SWD) while `F_CPU` says 72 MHz, likely HSI instead of the 8 MHz HSE crystal. LCD DWT delays use `F_CPU` (12.5 % long, harmless); switch them to `SystemCoreClock` and consider running the PLL from HSE at 72 MHz.
@@ -78,3 +76,13 @@ file. Slices and their order: `docs/architecture.md` §8.
   (`f_serial.hpp`, `MeadeParserSet.cpp`, `SiderealClock.cpp`, `Configuration_adv.hpp`); only native tests and
   `robin_e3` run in the gate. Run them once those toolchains are installed, or rely on upstream CI.
 - iPhone hotspot with no cellular signal in the field: does it stay up? Test before slice 4.
+- Camera (2026-11-25): wanted as a live viewer and for long exposures, placed at the eyepiece.
+  ESP32 OV-series sensors (OV2640/OV5640) are webcam parts: small pixels, noisy, IR-cut filter, JPEG,
+  short maximum exposure (exact limit unchecked, depends on the sensor driver), so live view of
+  Moon/planets only. Afocal (over the eyepiece) needs a lens focused at infinity and is fiddly;
+  prime focus (bare sensor with a 1.25" nosepiece, focus motor does the focusing) is better.
+  Options: (a) ESP32-S3 camera board as viewer only, mounted at the camera with a short ribbon and a
+  4-wire UART (TX, RX, GND, 5 V) to the Robin; (b) Raspberry Pi Zero 2 W + Pi HQ (IMX477) or
+  IMX462 at prime focus for real RAW long exposures, serving images to the PWA over WiFi, with the
+  ESP32-S3 kept as the LX200 bridge (~2 W more). Video needs WiFi on Android too (BLE is too slow).
+  Decide before the bridge/PWA slices.

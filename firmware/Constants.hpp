@@ -69,6 +69,7 @@
 #define DRIVER_TYPE_A4988_GENERIC      1  // Supports fixed microstepping
 #define DRIVER_TYPE_TMC2209_STANDALONE 2  // Supports fixed microstepping
 #define DRIVER_TYPE_TMC2209_UART       3  // Supports dynamic microstepping
+#define DRIVER_TYPE_ULN2003            4  // 28BYJ-48 on a ULN2003 board, half steps (Robin E3 focuser only)
 
 // USB serial port speed according to external controller
 #define SERIAL_BAUDRATE_ASCOM 19200

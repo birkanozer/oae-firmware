@@ -56,7 +56,10 @@ TinyGPSPlus gps;
 #endif
 
 // Focus Motor pins
-#if (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE)
+#if (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE) && (FOCUS_DRIVER_TYPE == DRIVER_TYPE_ULN2003)
+    #define FOCUSmotorPin1 FOCUS_ULN_PIN1  // IN1; IN3 and IN4 come from the pins file (configureFocusStepper)
+    #define FOCUSmotorPin2 FOCUS_ULN_PIN2  // IN2
+#elif (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE)
     #define FOCUSmotorPin1 FOCUS_STEP_PIN
     #define FOCUSmotorPin2 FOCUS_DIR_PIN
 #endif

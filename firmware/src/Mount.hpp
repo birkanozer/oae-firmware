@@ -369,6 +369,7 @@ class Mount
     bool setHomeHere();
     void applyPendingHomeReference();
     bool azDriverFailed() const;
+    bool altDriverFailed() const;
 #endif
 
     // Set the DEC limit position to the given angle in degrees (saved as DEC steps).
@@ -401,7 +402,7 @@ class Mount
     // Boot-time TMC UART connection test: 0 ok, 1 RA driver failed, 2 DEC driver failed
     uint8_t driverFault() const;
 
-    // Motor supply 12 or 24 V: scales the max slew speed (12 V) and sets the TMC2209 stealthChop PWM_OFS start value
+    // Motor supply 12, 15, 20 or 24 V (else 24): scales the max slew speed and sets the TMC2209 stealthChop PWM_OFS start value
     void applySupplyVoltage(uint8_t volts);
     uint8_t supplyVoltage() const;
 
@@ -474,7 +475,7 @@ class Mount
     void moveBy(int direction, float arcMinutes);
     void disableAzAltMotors();
     bool enableAzMotor();  // false: AZ driver failed its UART test, do not move
-    void enableAltMotor();
+    bool enableAltMotor();  // false: ALT driver failed its UART test, do not move
 #endif
 
 #if (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE)
@@ -728,6 +729,7 @@ class Mount
     bool _parkPending  = false;
     uint8_t _driverFault = 0;
     bool _azDriverFailed = false;  // AZ UART did not answer: enableAzMotor() keeps EN high
+    bool _altDriverFailed = false;  // ALT UART did not answer: enableAltMotor() keeps EN high
     bool _homeReferencePending = false;  // Set home here ran before date and time: sky reference still to take
     bool _focusDriverFailed = false;  // Focus UART did not answer: enableFocusMotor() keeps EN high
 };

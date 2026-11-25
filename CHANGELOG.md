@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.4.0] - 2026-11-25
+
+### Added
+
+- ALT motor on the Robin E3 E socket (bipolar-modded 28BYJ-48, TMC2209 UART on PC11), with the AZ numbers: 91 mA RMS, hold 30 %, released when idle, 2048 steps x 16 microsteps, steps per degree from upstream's OAE ALT formula. EN stays high until the UART current is set, a failed UART test refuses every ALT move without changing position, and the build stops with `#error` unless `UART_CONNECTION_TEST_TXRX` is 1.
+- Focus motor on a ULN2003 board (stock unipolar 28BYJ-48 on ULN group B: PA7, PC4, PC5, PC10, 5 V and GND from EXP1): new `DRIVER_TYPE_ULN2003`, AccelStepper half steps with the 28BYJ-48 coil order, 4096 half steps per turn, 800 half steps/s, 1000/s^2. The coils are released when idle unless `FOCUSER_ALWAYS_ON` is 1. No UART, current setting or fault detection; the build refuses ULN2003 on RA, DEC, AZ and ALT and on other boards.
+- LCD Adjust: ALT axis between AZ and Focus (only when fitted), with its position and the step in degrees. A failed ALT driver refuses only ALT moves ("ALT DRIVER FAULT"), ALT step moves count as moving and STOP stops them. LX200 `:MXl<n>#` (upstream's ALT letter) moves ALT by steps, now through the same driver check.
+
+### Changed
+
+- The supply setting (LCD Settings and `SUPPLY_VOLTAGE`) offers 12, 15, 20 and 24 V instead of 12 or 24 V (15 V for USB-PD power banks). Every TMC2209 UART axis gets its stealthChop PWM offset for the real voltage, and the slew speed cap is `min(1, SUPPLY_12V_SPEED_FACTOR * V / 12)`: 70 % at 12 V, 87.5 % at 15 V, full from 20 V.
+- The E socket carries ALT instead of the focuser, and AZ has its own pin defines on the Z socket (it no longer borrows ALT's). The focuser moves from the E socket's TMC2209 to a ULN2003 board, and the example config enables AZ, ALT and the ULN2003 focuser.
+
+### Fixed
+
+- AZ TMC2209 gets the same quiet settings as RA and DEC: stealthChop at all speeds, PWM at 47 kHz, TOFF 3 with TBL 2, and hold-current ramp-down.
+
 ## [v0.3.0] - 2026-11-10
 
 ### Added

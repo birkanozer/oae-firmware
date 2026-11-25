@@ -303,15 +303,17 @@ void UiController::clickScreen(uint32_t nowMs)
             _haveTarget = true, _tgtRa = _ra, _tgtDec = _dec;  // the target for Adjust -> Sync on target
             _screen = Screen::Status;
             break;
-        case Screen::Adjust:  // next axis; AZ and Focus only when configured
+        case Screen::Adjust:  // next axis in display order; AZ, ALT and Focus only when configured
         {
             clickTick();
-            uint8_t next = _axis;
+            uint8_t i = 0;
+            while (kAxisOrder[i] != _axis)
+                ++i;
             do
-                next = static_cast<uint8_t>((next + 1) % 4);
-            while ((next == 2 && !_m.hasAz) || (next == 3 && !_m.hasFocus));
-            _axis = next;
-            if (_axis >= 2 && _stepSel >= 5)  // no JOG on AZ and Focus
+                i = static_cast<uint8_t>((i + 1) % kAxes);
+            while (!axisFitted(kAxisOrder[i]));
+            _axis = kAxisOrder[i];
+            if (_axis >= 2 && _stepSel >= 5)  // no JOG on AZ, ALT and Focus
                 _stepSel = 4;
             break;
         }

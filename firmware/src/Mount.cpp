@@ -401,7 +401,11 @@ void Mount::configureALTStepper(byte pin1, byte pin2, int maxSpeed, int maxAccel
 #if (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE)
 void Mount::configureFocusStepper(byte pin1, byte pin2, int maxSpeed, int maxAcceleration)
 {
-    #ifdef NEW_STEPPER_LIB
+    #if FOCUS_DRIVER_TYPE == DRIVER_TYPE_ULN2003
+    // 28BYJ-48 on a ULN2003: pin1/pin2 are IN1/IN2. Half steps; AccelStepper wants the coils in the order IN1, IN3, IN2, IN4.
+    _stepperFocus = new AccelStepper(AccelStepper::HALF4WIRE, pin1, FOCUS_ULN_PIN3, pin2, FOCUS_ULN_PIN4);
+    _stepperFocus->disableOutputs();  // all four coils off until the first move
+    #elif defined(NEW_STEPPER_LIB)
     _stepperFocus = new StepperFocusSlew(AccelStepper::DRIVER, pin1, pin2);
     #else
     _stepperFocus = new AccelStepper(AccelStepper::DRIVER, pin1, pin2);
@@ -471,6 +475,10 @@ bool Mount::connectToDriver(const String &driverKind, uint16_t *rmsCurrent)
         if (driverKind == "AZ")
         {
             _azDriverFailed = true;
+        }
+        if (driverKind == "ALT")
+        {
+            _altDriverFailed = true;
         }
         if (driverKind == "FOC")
         {
@@ -760,7 +768,12 @@ void Mount::configureAZdriver(uint16_t AZ_SW_RX, uint16_t AZ_SW_TX, float rsense
         #endif
     LOG(DEBUG_STEPPERS, "[MOUNT]: Requested AZ motor rms_current: %d mA", rmscurrent);
     _driverAZ->rms_current(rmscurrent, AZ_MOTOR_HOLD_SETTING / 100.0);  //holdMultiplier = 1 to set ihold = irun
-        #if defined(ARDUINO_ARCH_RP2040)
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _driverAZ->iholddelay(TMC_IHOLDDELAY);
+    _driverAZ->TPOWERDOWN(TMC_TPOWERDOWN);
+    _driverAZ->pwm_freq(TMC_PWM_FREQ);
+    _driverAZ->toff(TMC_TOFF);          // toff 3..5 with tbl 2 (blank_time(24)); toff 1 whines
+        #elif defined(ARDUINO_ARCH_RP2040)
     _driverAZ->toff(4);  // toff>=3 required for StealthChop slow-decay phase
         #else
     _driverAZ->toff(1);
@@ -849,7 +862,12 @@ void Mount::configureALTdriver(uint16_t ALT_SW_RX, uint16_t ALT_SW_TX, float rse
         #endif
     LOG(DEBUG_STEPPERS, "[MOUNT]: Requested ALT motor rms_current: %d mA", rmscurrent);
     _driverALT->rms_current(rmscurrent, ALT_MOTOR_HOLD_SETTING / 100.0);  //holdMultiplier = 1 to set ihold = irun
-        #if defined(ARDUINO_ARCH_RP2040)
+        #if BOARD == BOARD_STM32_MKS_ROBIN_E3
+    _driverALT->iholddelay(TMC_IHOLDDELAY);
+    _driverALT->TPOWERDOWN(TMC_TPOWERDOWN);
+    _driverALT->pwm_freq(TMC_PWM_FREQ);
+    _driverALT->toff(TMC_TOFF);          // toff 3..5 with tbl 2 (blank_time(24)); toff 1 whines
+        #elif defined(ARDUINO_ARCH_RP2040)
     _driverALT->toff(4);  // toff>=3 required for StealthChop slow-decay phase
         #else
     _driverALT->toff(1);
@@ -2073,8 +2091,10 @@ void Mount::moveAZALTToHome()
     }
 #endif
 #if (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
-    enableAltMotor();
-    _stepperALT->moveTo(0);
+    if (enableAltMotor())
+    {
+        _stepperALT->moveTo(0);
+    }
 #endif
 }
 
@@ -2121,7 +2141,9 @@ void Mount::startPark()
 
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3                                                                                                      \
     && (RA_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART || DEC_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART                                          \
-        || (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)                                                    || (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART))
+        || (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)                                            \
+        || (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE && ALT_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)                                          \
+        || (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART))
 static uint8_t pwmOfsFor(float coilOhm, float rmsMilliAmp, uint8_t volts)
 {
     const float ofs = 374.0f * coilOhm * (rmsMilliAmp / 1000.0f) / volts;
@@ -2131,9 +2153,9 @@ static uint8_t pwmOfsFor(float coilOhm, float rmsMilliAmp, uint8_t volts)
 
 void Mount::applySupplyVoltage(uint8_t volts)
 {
-    _supplyVolts = volts == 12 ? 12 : 24;
-    // Slews re-apply _max*Speed when they start
-    const float factor = _supplyVolts == 12 ? SUPPLY_12V_SPEED_FACTOR : 1.0f;
+    _supplyVolts = (volts == 12 || volts == 15 || volts == 20) ? volts : 24;
+    // Slews re-apply _max*Speed when they start. SUPPLY_12V_SPEED_FACTOR at 12 V, rising with the voltage, capped at 1.
+    const float factor = fminf(1.0f, SUPPLY_12V_SPEED_FACTOR * _supplyVolts / 12.0f);
     _maxRASpeed        = static_cast<uint32_t>(_cfgRASpeed * factor);
     _maxDECSpeed       = static_cast<uint32_t>(_cfgDECSpeed * factor);
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3 && RA_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
@@ -2147,6 +2169,10 @@ void Mount::applySupplyVoltage(uint8_t volts)
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3 && AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && AZ_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
     _driverAZ->pwm_ofs(pwmOfsFor(AZ_COIL_RESISTANCE_OHM, (AZ_RMSCURRENT), _supplyVolts));
     _driverAZ->pwm_autoscale(true);
+#endif
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && ALT_STEPPER_TYPE != STEPPER_TYPE_NONE && ALT_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
+    _driverALT->pwm_ofs(pwmOfsFor(ALT_COIL_RESISTANCE_OHM, (ALT_RMSCURRENT), _supplyVolts));
+    _driverALT->pwm_autoscale(true);
 #endif
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3 && FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
     _driverFocus->pwm_ofs(pwmOfsFor(FOCUS_COIL_RESISTANCE_OHM, (FOCUS_RMSCURRENT), _supplyVolts));
@@ -2241,6 +2267,16 @@ bool Mount::isRunningALT() const
 }
 #endif
 
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+// Base of a relative step move: a stepper still running (or decelerating) is aimed from where it is already headed,
+// so repeated Adjust moves add up instead of restarting from the current position and losing distance.
+template <class S>
+static long stepMoveBase(S *stepper)
+{
+    return stepper->isRunning() ? stepper->targetPosition() : stepper->currentPosition();
+}
+#endif
+
 #if (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE) || (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
 /////////////////////////////////
 //
@@ -2262,9 +2298,11 @@ void Mount::moveBy(int direction, float arcMinutes)
     #if (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
     if (direction == ALTITUDE_STEPS)
     {
-        enableAltMotor();
-        long stepsToMove = arcMinutes * ALTITUDE_STEPS_PER_ARC_MINUTE;
-        _stepperALT->move(stepsToMove);
+        if (enableAltMotor())
+        {
+            long stepsToMove = arcMinutes * ALTITUDE_STEPS_PER_ARC_MINUTE;
+            _stepperALT->move(stepsToMove);
+        }
     }
     #endif
 }
@@ -2330,13 +2368,18 @@ bool Mount::enableAzMotor()
     return true;
 }
 
-void Mount::enableAltMotor()
+bool Mount::enableAltMotor()
 {
     #if (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
+    if (_altDriverFailed)
+    {
+        return false;  // See enableAzMotor()
+    }
     digitalWrite(ALT_EN_PIN, LOW);  // Logic LOW to enable driver
     // See enableAzMotor()
     _azAltWasRunning = true;
     #endif
+    return true;
 }
 
 #endif
@@ -2399,16 +2442,6 @@ void Mount::focusContinuousMove(FocuserDirection direction)
     setSpeed(FOCUS_STEPS, static_cast<int>(direction) * _maxFocusRateSpeed);
 }
 
-#if BOARD == BOARD_STM32_MKS_ROBIN_E3
-// Base of a relative step move: a stepper still running (or decelerating) is aimed from where it is already headed,
-// so repeated Adjust moves add up instead of restarting from the current position and losing distance.
-template <class S>
-static long stepMoveBase(S *stepper)
-{
-    return stepper->isRunning() ? stepper->targetPosition() : stepper->currentPosition();
-}
-#endif
-
 /////////////////////////////////
 //
 // focusMoveBy
@@ -2463,7 +2496,10 @@ void Mount::disableFocusMotor()
 
     #if (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE)
         #if FOCUSER_ALWAYS_ON == 0
-            #if (FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)
+            #if (FOCUS_DRIVER_TYPE == DRIVER_TYPE_ULN2003)
+    LOG(DEBUG_FOCUS, "[FOCUS]: disableFocusMotor: ULN2003 releasing the coils");
+    _stepperFocus->disableOutputs();  // all four pins low
+            #elif (FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)
 
     LOG(DEBUG_FOCUS, "[FOCUS]: disableFocusMotor: TMC2209U disabling enable pin");
     digitalWrite(FOCUS_EN_PIN, HIGH);  // Logic HIGH to disable driver
@@ -2486,8 +2522,11 @@ bool Mount::enableFocusMotor()
     {
         return false;  // UART did not answer at boot: never run on the board's VREF current
     }
+    _focuserWasRunning = true;  // loop() releases the coils after the move, even a 1-step move
+    #if FOCUS_DRIVER_TYPE != DRIVER_TYPE_ULN2003  // a ULN2003 has no EN: the next step drives the coils again
     LOG(DEBUG_FOCUS, "[FOCUS]: enableFocusMotor: enabling driver pin.");
     digitalWrite(FOCUS_EN_PIN, LOW);  // Logic LOW to enable driver
+    #endif
     return true;
 }
 
@@ -3840,6 +3879,11 @@ bool Mount::azDriverFailed() const
 {
     return _azDriverFailed;
 }
+
+bool Mount::altDriverFailed() const
+{
+    return _altDriverFailed;
+}
 #endif
 
 /////////////////////////////////
@@ -4198,8 +4242,18 @@ void Mount::moveStepperBy(StepperAxis direction, long steps)
         case ALTITUDE_STEPS:
             {
 #if ALT_STEPPER_TYPE != STEPPER_TYPE_NONE
-                enableAltMotor();
-                _stepperALT->moveTo(_stepperALT->currentPosition() + steps);
+                if (enableAltMotor())
+                {
+                    LOG(DEBUG_STEPPERS,
+                        "[STEPPERS]: moveStepperBy: ALT from %l to %l",
+                        _stepperALT->currentPosition(),
+                        _stepperALT->currentPosition() + steps);
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3
+                    _stepperALT->moveTo(stepMoveBase(_stepperALT) + steps);
+#else
+                    _stepperALT->moveTo(_stepperALT->currentPosition() + steps);
+#endif
+                }
 #endif
             }
             break;

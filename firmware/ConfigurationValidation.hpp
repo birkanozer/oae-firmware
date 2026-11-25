@@ -285,6 +285,13 @@
             // Required pin assignments missing
             #error Missing pin assignments for configured Focuser DRIVER_TYPE_A4988_GENERIC or DRIVER_TYPE_TMC2209_STANDALONE driver
         #endif
+    #elif (FOCUS_DRIVER_TYPE == DRIVER_TYPE_ULN2003)
+        #if BOARD != BOARD_STM32_MKS_ROBIN_E3
+            #error The ULN2003 focuser is only supported on the MKS Robin E3
+        #endif
+        #if !defined(FOCUS_ULN_PIN1) || !defined(FOCUS_ULN_PIN2) || !defined(FOCUS_ULN_PIN3) || !defined(FOCUS_ULN_PIN4)
+            #error Missing pin assignments for the ULN2003 focuser (FOCUS_ULN_PIN1..4)
+        #endif
     #elif (FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART)
         #if !defined(FOCUS_STEP_PIN) || !defined(FOCUS_DIR_PIN) || !defined(FOCUS_EN_PIN)
             // Required pin assignments missing (ATmega uses SoftwareSerial for this driver)
@@ -469,8 +476,14 @@
     #endif
 #endif
 
-#if SUPPLY_VOLTAGE != 12 && SUPPLY_VOLTAGE != 24
-    #error SUPPLY_VOLTAGE must be 12 or 24.
+// ULN2003 drives the focuser only (no current control, no fault detection).
+#if RA_DRIVER_TYPE == DRIVER_TYPE_ULN2003 || DEC_DRIVER_TYPE == DRIVER_TYPE_ULN2003 || AZ_DRIVER_TYPE == DRIVER_TYPE_ULN2003               \
+    || ALT_DRIVER_TYPE == DRIVER_TYPE_ULN2003
+    #error DRIVER_TYPE_ULN2003 is supported for the focuser only
+#endif
+
+#if SUPPLY_VOLTAGE != 12 && SUPPLY_VOLTAGE != 15 && SUPPLY_VOLTAGE != 20 && SUPPLY_VOLTAGE != 24
+    #error SUPPLY_VOLTAGE must be 12, 15, 20 or 24.
 #endif
 
 #if USE_LCD_UI == 1 && BOARD != BOARD_STM32_MKS_ROBIN_E3
@@ -493,7 +506,13 @@
     #error AZ on a TMC2209 UART needs UART_CONNECTION_TEST_TXRX 1 on the Robin E3
 #endif
 
-// Same for the focuser on the E socket.
+// Same for ALT on the E socket.
+#if BOARD == BOARD_STM32_MKS_ROBIN_E3 && ALT_STEPPER_TYPE != STEPPER_TYPE_NONE && ALT_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART              \
+    && UART_CONNECTION_TEST_TXRX != 1
+    #error ALT on a TMC2209 UART needs UART_CONNECTION_TEST_TXRX 1 on the Robin E3
+#endif
+
+// Same for a focuser on a TMC2209 UART (a ULN2003 focuser has no UART and no test).
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3 && FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE && FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART            \
     && UART_CONNECTION_TEST_TXRX != 1
     #error Focus on a TMC2209 UART needs UART_CONNECTION_TEST_TXRX 1 on the Robin E3

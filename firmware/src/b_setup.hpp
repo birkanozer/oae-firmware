@@ -361,9 +361,11 @@ void setup()
 
 #if (FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE)
     int focusLine = addConsoleText(F("Init Focuser..."));
+    #if FOCUS_DRIVER_TYPE != DRIVER_TYPE_ULN2003  // a ULN2003 has no EN: its coils are released in configureFocusStepper()
     LOG(DEBUG_FOCUS, "[FOCUS]: setup(): focus disabling enable pin");
     pinMode(FOCUS_EN_PIN, OUTPUT);
     digitalWrite(FOCUS_EN_PIN, HIGH);  // Logic HIGH to disable the driver initally
+    #endif
     #if FOCUS_DRIVER_TYPE == DRIVER_TYPE_TMC2209_UART
         // include TMC2209 UART pins
         #ifdef FOCUS_SERIAL_PORT
@@ -380,13 +382,13 @@ void setup()
 
 #if defined(ARDUINO_ARCH_STM32)
     // Unused driver sockets: keep their EN lines HIGH (disabled) so a motor plugged in is not energized by a floating pin.
-    #if ALT_STEPPER_TYPE == STEPPER_TYPE_NONE
-    pinMode(ALT_EN_PIN, OUTPUT);
-    digitalWrite(ALT_EN_PIN, HIGH);
+    #if AZ_STEPPER_TYPE == STEPPER_TYPE_NONE
+    pinMode(AZ_EN_PIN, OUTPUT);  // Z socket
+    digitalWrite(AZ_EN_PIN, HIGH);
     #endif
-    #if FOCUS_STEPPER_TYPE == STEPPER_TYPE_NONE
-    pinMode(FOCUS_EN_PIN, OUTPUT);
-    digitalWrite(FOCUS_EN_PIN, HIGH);
+    #if ALT_STEPPER_TYPE == STEPPER_TYPE_NONE
+    pinMode(ALT_EN_PIN, OUTPUT);  // E socket
+    digitalWrite(ALT_EN_PIN, HIGH);
     #endif
 #endif
 

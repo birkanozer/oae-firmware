@@ -9,7 +9,7 @@ const SettingRow kRows[] = {
     {SettingId::Language, TextId::LangRow, SettingType::Enum, 0, 1, 0},
     {SettingId::MinAlt, TextId::MinAlt, SettingType::Int, -10, 30, 0},
     {SettingId::Beep, TextId::BeepRow, SettingType::Bool, 0, 1, 1},
-    {SettingId::Supply, TextId::SupplyRow, SettingType::Enum, 0, 1, 1},
+    {SettingId::Supply, TextId::SupplyRow, SettingType::Enum, 0, 3, 3},
 };
 
 static_assert(sizeof(kRows) / sizeof(kRows[0]) == static_cast<unsigned>(SettingId::Count), "kRows must match SettingId");

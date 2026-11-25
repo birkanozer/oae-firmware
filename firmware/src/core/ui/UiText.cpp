@@ -117,6 +117,7 @@ const Entry kTable[] = {
     {"RA DRIVER FAULT", "RA SURUCU HATASI"},
     {"DEC DRIVER FAULT", "DEC SURUCU HATASI"},
     {"DRIVER FAULT", "SURUCU HATASI"},
+    {"ALT DRIVER FAULT", "ALT SURUCU HATASI"},
     {"MOUNT FAULT", "MONTUR HATASI"},
     {"Motors stopped", "Motorlar durdu"},
     {"Date + time lost", "Tarih + saat silindi"},

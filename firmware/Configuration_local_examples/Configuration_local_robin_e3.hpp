@@ -23,16 +23,18 @@
 #define RA_STEPPER_TYPE    STEPPER_TYPE_ENABLED
 #define DEC_STEPPER_TYPE   STEPPER_TYPE_ENABLED
 #define AZ_STEPPER_TYPE    STEPPER_TYPE_ENABLED
-#define ALT_STEPPER_TYPE   STEPPER_TYPE_NONE
+#define ALT_STEPPER_TYPE   STEPPER_TYPE_ENABLED
 #define FOCUS_STEPPER_TYPE STEPPER_TYPE_ENABLED
 
 #define RA_DRIVER_TYPE  DRIVER_TYPE_TMC2209_UART
 #define DEC_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
-// AZ: bipolar-modded 28BYJ-48 on the Z socket (step PC14, dir PC15, EN PB8, UART PC12). ALT must stay off, it shares the
-// socket. For the stock ULN2003 board instead, see docs/wiring.md.
+// AZ: bipolar-modded 28BYJ-48 on the Z socket (step PC14, dir PC15, EN PB8, UART PC12).
 #define AZ_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
-// Focus: bipolar-modded 28BYJ-48 on the E socket (step PB4, dir PB3, EN PB5, UART PC11), same motor rules as AZ.
-#define FOCUS_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
+// ALT: bipolar-modded 28BYJ-48 on the E socket (step PB4, dir PB3, EN PB5, UART PC11), same motor rules as AZ.
+#define ALT_DRIVER_TYPE DRIVER_TYPE_TMC2209_UART
+// Focus: stock (unipolar) 28BYJ-48 on a ULN2003 board, IN1..IN4 on ULN group B (PA7, PC4, PC5, PC10), 5 V and GND
+// from EXP1 10/9. See docs/wiring.md.
+#define FOCUS_DRIVER_TYPE DRIVER_TYPE_ULN2003
 
 // Motors rated at 470 mA, run at 75 % (RMS computed by Configuration_adv.hpp).
 #define RA_MOTOR_CURRENT_RATING      470  // mA
@@ -42,7 +44,7 @@
 #define DEC_OPERATING_CURRENT_SETTING 75   // %
 
 // AZ: 5 V 28BYJ-48 with the centre tap cut (bipolar, two halves in series, R_full = 2 * R_half, typically R_half 22-50 ohm).
-// The driver chops the current, so the 12/24 V supply is fine once the UART current is applied. Never run it on the
+// The driver chops the current, so the 12-24 V supply is fine once the UART current is applied. Never run it on the
 // board's VREF current. Rated half-coil current is 5 V / R_half. Series coils need about 0.5x of it for equal torque and
 // 0.7x for equal heat. For intermittent duty: Irms = 0.7 * 5 / R_half (R_half 25 ohm -> 140 mA, 50 ohm -> 70 mA).
 // AZ_MOTOR_CURRENT_RATING is a PEAK value: Configuration_adv.hpp divides by 1.414 to get RMS.
@@ -66,23 +68,35 @@
 #define AZ_STEPPER_SPEED        (400 * AZ_MICROSTEPPING)
 #define AZ_STEPPER_ACCELERATION (200 * AZ_MICROSTEPPING)
 
-// Focus: same motor and current rule as AZ (150 mA peak = 91 mA RMS), hold low, released when idle (FOCUSER_ALWAYS_ON 0).
+// ALT: same motor and current rule as AZ (150 mA peak = 91 mA RMS), hold 30 %, released when idle (ALT_ALWAYS_ON 0).
+// ALTITUDE_STEPS_PER_REV (OAE) = ALT_CORRECTION_FACTOR * (ALT_CIRCUMFERENCE / ALT_ROD_PITCH) * ALT_STEPPER_SPR * ALT_MICROSTEPPING,
+// with the OAE 130 mm radius and 1.25 mm rod pitch: 653.5 rod turns * 2048 * 16 = 21.41 M microsteps per altitude turn.
 // Speed and acceleration in microsteps/s, like AZ.
-#define FOCUS_MOTOR_CURRENT_RATING      150  // mA, peak
-#define FOCUS_OPERATING_CURRENT_SETTING 100  // %
-#define FOCUSER_MOTOR_HOLD_SETTING      30
-#define FOCUSER_ALWAYS_ON               0
-#define FOCUS_STEPPER_SPR               2048
-#define FOCUS_MICROSTEPPING             16
-#define FOCUS_STEPPER_SPEED             (400 * FOCUS_MICROSTEPPING)
-#define FOCUS_STEPPER_ACCELERATION      (200 * FOCUS_MICROSTEPPING)
+#define ALT_MOTOR_CURRENT_RATING      150  // mA, peak
+#define ALT_OPERATING_CURRENT_SETTING 100  // %
+#define ALT_MOTOR_HOLD_SETTING        30
+#define ALT_ALWAYS_ON                 0
+#define ALT_COIL_RESISTANCE_OHM       50.0f
+#define ALT_STEPPER_SPR               2048
+#define ALT_MICROSTEPPING             16
+#define ALT_STEPPER_SPEED             (400 * ALT_MICROSTEPPING)
+#define ALT_STEPPER_ACCELERATION      (200 * ALT_MICROSTEPPING)
+
+// Focus on the ULN2003: half steps, so 4096 per output turn and no microstepping. No UART, no current setting and no
+// fault detection. Speed and acceleration in half steps/s: the 28BYJ-48 at 5 V stalls near 1000/s. The coils are
+// released (all four pins low) when idle unless FOCUSER_ALWAYS_ON is 1.
+#define FOCUS_STEPPER_SPR          4096
+#define FOCUS_MICROSTEPPING        1
+#define FOCUS_STEPPER_SPEED        800
+#define FOCUS_STEPPER_ACCELERATION 1000
+#define FOCUSER_ALWAYS_ON          0
 
 // A driver that does not answer on its UART is disabled (EN high) instead of running at the board's VREF current.
 #define UART_CONNECTION_TEST_TXRX 1
 
 #define TRACK_ON_BOOT 0
 
-// Motor supply, 12 or 24 V.
+// Motor supply, 12, 15, 20 or 24 V (also changeable in the LCD Settings).
 #define SUPPLY_VOLTAGE 24
 
 // Ender-3 LCD and knob on the Ender-3 header.

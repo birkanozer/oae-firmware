@@ -71,7 +71,7 @@
     #define DEC_STEPPER_ACCELERATION 6000
 #endif
 
-// MKS Robin E3: quiet TMC2209 on RA and DEC (stealthChop while idle, tracking and guiding)
+// MKS Robin E3: quiet TMC2209 on RA and DEC (stealthChop while idle, tracking and guiding); AZ and ALT share the TMC_* values
 #if BOARD == BOARD_STM32_MKS_ROBIN_E3
     #ifndef RA_UART_STEALTH_MODE
         #define RA_UART_STEALTH_MODE 1
@@ -740,8 +740,9 @@
     #define DEBUG_LEVEL (DEBUG_NONE)
 #endif
 
-// Motor supply voltage, 12 or 24 V. At 12 V the max slew speed is scaled down and, for TMC2209 UART
-// axes, the stealthChop PWM_OFS start value is computed for the supply (PWM_OFS ~ 374 * R_coil * I_rms / V).
+// Motor supply voltage, 12, 15, 20 or 24 V. Below 20 V the max slew speed is scaled down
+// (min(1, SUPPLY_12V_SPEED_FACTOR * V / 12)) and, for TMC2209 UART axes, the stealthChop PWM_OFS start value is
+// computed for the supply (PWM_OFS ~ 374 * R_coil * I_rms / V).
 #ifndef SUPPLY_VOLTAGE
     #define SUPPLY_VOLTAGE 24
 #endif
@@ -759,6 +760,9 @@
 #endif
 #ifndef FOCUS_COIL_RESISTANCE_OHM
     #define FOCUS_COIL_RESISTANCE_OHM 50.0f  // ohms, bipolar-modded 28BYJ-48 (same motor as AZ)
+#endif
+#ifndef ALT_COIL_RESISTANCE_OHM
+    #define ALT_COIL_RESISTANCE_OHM 50.0f  // ohms, bipolar-modded 28BYJ-48 (same motor as AZ)
 #endif
 
 // Onboard 128x64 LCD + knob UI (Ender-3 header, robin_e3 only)

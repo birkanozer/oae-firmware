@@ -46,8 +46,8 @@ core::MountState UiMountAdapter::state()
     }
     if (_jogMask != 0 || _jogTail || (_mount.mountStatus() & STATUS_SLEWING_MANUAL))
         return MountState::Jogging;
-    // AZ and Focus step moves (Adjust page) run on their own steppers: count them as moving so a click is STOP.
-    if (_mount.isAxisRunning(AZIMUTH_STEPS) || _mount.isAxisRunning(FOCUS_STEPS))
+    // AZ, ALT and Focus step moves (Adjust page) run on their own steppers: count them as moving so a click is STOP.
+    if (_mount.isAxisRunning(AZIMUTH_STEPS) || _mount.isAxisRunning(ALTITUDE_STEPS) || _mount.isAxisRunning(FOCUS_STEPS))
         return MountState::Jogging;
     if (_mount.isSlewingRAorDEC())
         return MountState::Slewing;
@@ -98,15 +98,20 @@ void UiMountAdapter::fill(core::MountSnapshot &s)
     s.supplyVoltage   = _mount.supplyVoltage();
     s.hasAz           = AZ_STEPPER_TYPE != STEPPER_TYPE_NONE;
     s.hasFocus        = FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE;
+    s.hasAlt          = ALT_STEPPER_TYPE != STEPPER_TYPE_NONE;
     s.azFault         = _mount.azDriverFailed();
     s.focusFault      = _mount.focusDriverFailed();
+    s.altFault        = _mount.altDriverFailed();
     s.axisPos[0]      = _mount.getCurrentStepperPosition(RA_STEPS);
     s.axisPos[1]      = _mount.getCurrentStepperPosition(DEC_STEPS);
     s.axisPos[2]      = _mount.getCurrentStepperPosition(AZIMUTH_STEPS);
     s.axisPos[3]      = _mount.getCurrentStepperPosition(FOCUS_STEPS);
+    s.axisPos[4]      = _mount.getCurrentStepperPosition(ALTITUDE_STEPS);
     s.stepsPerDeg[0]  = _mount.getStepsPerDegree(RA_STEPS);
     s.stepsPerDeg[1]  = _mount.getStepsPerDegree(DEC_STEPS);
     s.stepsPerDeg[2]  = s.hasAz ? _mount.getStepsPerDegree(AZIMUTH_STEPS) : 0.0f;
+    s.stepsPerDeg[3]  = 0.0f;  // Focus: steps only
+    s.stepsPerDeg[4]  = s.hasAlt ? _mount.getStepsPerDegree(ALTITUDE_STEPS) : 0.0f;
 }
 
 void UiMountAdapter::apply(const core::UiAction &a)
@@ -120,6 +125,7 @@ void UiMountAdapter::apply(const core::UiAction &a)
             _jogTail = false;
             _mount.stopAll();  // stays stopped: the arrival block does not restart tracking
             _mount.stopSlewing(AZIMUTH_STEPS);  // stopAll() only covers RA, DEC and tracking
+            _mount.stopSlewing(ALTITUDE_STEPS);
             _mount.stopSlewing(FOCUS_STEPS);
             break;
         case Kind::TrackOn:
@@ -211,8 +217,8 @@ void UiMountAdapter::apply(const core::UiAction &a)
             break;
         case Kind::MoveSteps:  // same call as the LX200 :MX command
         {
-            static const StepperAxis axes[4] = {RA_STEPS, DEC_STEPS, AZIMUTH_STEPS, FOCUS_STEPS};
-            if (a.b >= 0 && a.b < 4)
+            static const StepperAxis axes[5] = {RA_STEPS, DEC_STEPS, AZIMUTH_STEPS, FOCUS_STEPS, ALTITUDE_STEPS};
+            if (a.b >= 0 && a.b < 5)
             {
                 _goingHome = false;
                 _mount.moveStepperBy(axes[a.b], a.a);

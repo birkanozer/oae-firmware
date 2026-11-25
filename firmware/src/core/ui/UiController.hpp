@@ -39,13 +39,13 @@ struct MountSnapshot
     uint8_t slewRate;  // 1..4
     bool dateSet, timeSet, rebooted, synced;
     uint8_t faultCode;  // 0 = none
-    uint8_t supplyVoltage;  // 12 or 24 (0 = unknown, shown as the default)
-    // Adjust page. Axis order RA, DEC, AZ, Focus. axisPos: current step position (slew-mode steps).
-    // stepsPerDeg: RA slew, DEC slew, AZ (0 = unknown).
-    bool hasAz, hasFocus;  // that motor is configured
-    bool azFault, focusFault;  // its driver failed the UART test: never move it
-    int32_t axisPos[4];
-    float stepsPerDeg[3];
+    uint8_t supplyVoltage;  // 12, 15, 20 or 24 (0 = unknown, shown as the default)
+    // Adjust page. Arrays are indexed by axis id: 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT (shown RA, DEC, AZ, ALT, Focus).
+    // axisPos: current step position (slew-mode steps). stepsPerDeg: 0 = unknown or none (Focus).
+    bool hasAz, hasFocus, hasAlt;  // that motor is configured
+    bool azFault, focusFault, altFault;  // its driver failed the UART test: never move it
+    int32_t axisPos[5];
+    float stepsPerDeg[5];
 };
 
 struct UiAction
@@ -72,8 +72,8 @@ struct UiAction
         Beep,
         BeepError,
         BeepLong,
-        SetSupplyVoltage,  // a = volts (12 or 24)
-        MoveSteps  // a = signed steps, b = axis (0 RA, 1 DEC, 2 AZ, 3 Focus)
+        SetSupplyVoltage,  // a = volts (12, 15, 20 or 24)
+        MoveSteps  // a = signed steps, b = axis (0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT)
     };
     Kind kind;
     // JogStart/JogStop: direction bits N1 E2 S4 W8; Goto/Sync: raSeconds; SetDate: yyyymmdd; SetTime: seconds of day;
@@ -192,10 +192,13 @@ class UiController
     void clickAdjustOptions(uint8_t row);
     void turnAdjust(int8_t detents, uint32_t nowMs);
     TextId optionLock(uint8_t row) const;  // Adjust options: Count = unlocked, else message id
-    bool axisFaulted() const { return (_axis == 2 && _m.azFault) || (_axis == 3 && _m.focusFault); }
+    bool axisFaulted() const { return (_axis == 2 && _m.azFault) || (_axis == 3 && _m.focusFault) || (_axis == 4 && _m.altFault); }
+    bool axisFitted(uint8_t a) const { return a < 2 || (a == 2 && _m.hasAz) || (a == 3 && _m.hasFocus) || (a == 4 && _m.hasAlt); }
+    static constexpr uint8_t kAxes = 5;
+    static constexpr uint8_t kAxisOrder[kAxes] = {0, 1, 2, 4, 3};  // display order RA, DEC, AZ, ALT, Focus (axis ids)
     void jogStop();
     TextId speedText() const;
-    int supplyVolts() const { return _m.supplyVoltage ? _m.supplyVoltage : (_settings.get(SettingId::Supply) ? 24 : 12); }
+    int supplyVolts() const { return _m.supplyVoltage ? _m.supplyVoltage : kSupplyVolts[_settings.get(SettingId::Supply)]; }
     char letter(bool positive, bool lat) const;
     void formatEdit(char *out, size_t n, FieldKind k, int32_t v) const;
     // state helpers
@@ -262,7 +265,7 @@ class UiController
     UiAction _pending[2];
     uint8_t _pendingN = 0;
     Screen _ret = Screen::Status;  // after ClearsSync
-    uint8_t _axis = 0;  // Adjust: 0 RA, 1 DEC, 2 AZ, 3 Focus
+    uint8_t _axis = 0;  // Adjust: axis id, 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT
     uint8_t _stepSel = 2;  // Adjust: 0..4 = 1, 10, 100, 1000, 10000 steps; 5..8 = JOG SLOW..MAX (RA/DEC only)
     uint8_t _jogDir = 0;  // own jog in progress (0 = none)
     uint32_t _jogMs = 0;

@@ -11,7 +11,7 @@ enum class SettingId : uint8_t
     Language,  // 0 = EN, 1 = TR
     MinAlt,    // degrees
     Beep,      // 0 off, 1 on (click ticks only; safety beeps stay on)
-    Supply,    // 0 = 12 V, 1 = 24 V; shown from the snapshot, changed with SetSupplyVoltage
+    Supply,    // index into kSupplyVolts; shown from the snapshot, changed with SetSupplyVoltage
     Count
 };
 
@@ -31,6 +31,8 @@ struct SettingRow
 };
 
 const SettingRow &settingRow(SettingId id);
+
+constexpr int kSupplyVolts[] = {12, 15, 20, 24};  // motor supply choices (15 V: USB-PD power banks)
 
 class UiSettings
 {

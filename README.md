@@ -59,7 +59,7 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   on any screen issues STOP, which halts every motor including tracking. The footer shows
   `click: STOP`. Turning the knob does nothing during motion, except on the Adjust screen.
 - **Point:** RA, then Dec, then a confirm screen; turn to pick GO or SYNC, click to run it.
-- **Adjust:** turn to move the selected axis (RA, DEC, and AZ or Focus when fitted) by one step
+- **Adjust:** turn to move the selected axis (RA, DEC, and AZ, ALT or Focus when fitted) by one step
   size per detent; click picks the next axis; hold opens the options: step size (1 to 10 000
   steps, or a continuous jog at SLOW / CENTER / FIND / MAX for RA and DEC), Sync on target, Set home
   here and Go home. The screen shows the axis position and what a step is in degrees. Use it to
@@ -69,13 +69,14 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   screen names what is missing; click the warning to go straight to Date, then Time.
 - **GoTo refuses** targets below the minimum altitude or within 15° of the Sun. The refused screen
   returns to the editor with the values kept.
-- **Settings** has language (EN/TR), minimum altitude, beep, and supply (12 V or 24 V, default
-  24 V). Supply sets the TMC2209 starting values and caps slew speed at 70 % on 12 V. Screen
-  settings reset at boot until settings storage lands (slice 3).
+- **Settings** has language (EN/TR), minimum altitude, beep, and supply (12, 15, 20 or 24 V,
+  default 24 V; 15 V suits USB-PD power banks). Supply sets the TMC2209 starting values and caps slew
+  speed at 70 % on 12 V and 87.5 % on 15 V (full speed from 20 V). Screen settings reset at boot until
+  settings storage lands (slice 3).
 
 ## Motor noise (TMC2209)
 
-RA and DEC run stealthChop at idle, tracking and guiding, and spreadCycle only when slewing fast. If a motor still hisses,
+RA, DEC, AZ and ALT run stealthChop at idle, tracking and guiding, and spreadCycle only when moving fast. If a motor still hisses,
 set these as `#define`s in your local config: `TMC_PWM_FREQ` 3 (58 kHz) or 1 (35 kHz), `RA_HOLD_PERCENT` / `DEC_HOLD_PERCENT`
 lower (30) if the hiss is at standstill, `TMC_TOFF` 4 or 5, or `TMC_TPWMTHRS` raised (3000) to stay in stealthChop for faster
 moves. More hold means more torque and heat, less hold means quieter but a softer stop.

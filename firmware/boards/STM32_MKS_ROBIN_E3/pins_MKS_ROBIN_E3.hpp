@@ -4,8 +4,7 @@
  * Single source for the wiring: docs/wiring.md.
  *
  * Stepper socket mapping (OAT axis -> socket):
- *   X -> RA, Y -> DEC, Z -> ALT (free socket), E -> FOCUS (free socket)
- *   The Z socket can carry AZ instead of ALT (AZ_STEPPER_TYPE enabled, ALT disabled).
+ *   X -> RA, Y -> DEC, Z -> AZ, E -> ALT. FOCUS is a ULN2003 board on ULN group B (no socket).
  *
  * Each TMC2209 has its own single-wire UART (PDN) pin, driven by SoftwareSerial on TIM7
  * (-D TIMER_SERIAL=TIM7). TX and RX are the same pin; address 0 on every driver.
@@ -61,73 +60,50 @@
     #define DEC_DRIVER_ADDRESS 0b00
 #endif
 
-// ── ALT axis (Z socket; AZ homing endstop Z- is PC6, spare Z+ is PB1) ────────
-#ifndef ALT_STEP_PIN
-    #define ALT_STEP_PIN PC14
+// ── AZ axis (Z socket; AZ homing endstop Z- is PC6) ─────────────────────────
+#ifndef AZ_STEP_PIN
+    #define AZ_STEP_PIN PC14
 #endif
-#ifndef ALT_DIR_PIN
-    #define ALT_DIR_PIN PC15
+#ifndef AZ_DIR_PIN
+    #define AZ_DIR_PIN PC15
 #endif
-#ifndef ALT_EN_PIN
-    #define ALT_EN_PIN PB8  // active LOW
-#endif
-#ifndef ALT_DIAG_PIN
-    #define ALT_DIAG_PIN PB1  // Z+ / probe endstop
-#endif
-#ifndef ALT_SERIAL_PORT_TX
-    #define ALT_SERIAL_PORT_TX PC12
-#endif
-#ifndef ALT_SERIAL_PORT_RX
-    #define ALT_SERIAL_PORT_RX PC12
-#endif
-#ifndef ALT_DRIVER_ADDRESS
-    #define ALT_DRIVER_ADDRESS 0b00
+#ifndef AZ_EN_PIN
+    #define AZ_EN_PIN PB8  // active LOW
 #endif
 #ifndef AZ_DIAG_PIN
     #define AZ_DIAG_PIN PC6  // Z- endstop
 #endif
-
-// ── AZ axis: shares the Z socket with ALT, so only one of the two can be enabled ─
-#if AZ_STEPPER_TYPE != STEPPER_TYPE_NONE && ALT_STEPPER_TYPE != STEPPER_TYPE_NONE
-    #error AZ and ALT share the Z socket on the Robin E3: enable only one of them
-#endif
-#ifndef AZ_STEP_PIN
-    #define AZ_STEP_PIN ALT_STEP_PIN
-#endif
-#ifndef AZ_DIR_PIN
-    #define AZ_DIR_PIN ALT_DIR_PIN
-#endif
-#ifndef AZ_EN_PIN
-    #define AZ_EN_PIN ALT_EN_PIN  // active LOW
-#endif
 #ifndef AZ_SERIAL_PORT_TX
-    #define AZ_SERIAL_PORT_TX ALT_SERIAL_PORT_TX
+    #define AZ_SERIAL_PORT_TX PC12
 #endif
 #ifndef AZ_SERIAL_PORT_RX
-    #define AZ_SERIAL_PORT_RX ALT_SERIAL_PORT_RX
+    #define AZ_SERIAL_PORT_RX PC12
 #endif
 #ifndef AZ_DRIVER_ADDRESS
     #define AZ_DRIVER_ADDRESS 0b00
 #endif
 
-// ── FOCUS axis (E socket; PB3/PB4 need JTAG off, done first thing in setup()) ─
-#ifndef FOCUS_STEP_PIN
-    #define FOCUS_STEP_PIN PB4
+// ── ALT axis (E socket; PB3/PB4 need JTAG off, done first thing in setup(); spare Z+ PB1) ─
+#ifndef ALT_STEP_PIN
+    #define ALT_STEP_PIN PB4
 #endif
-#ifndef FOCUS_DIR_PIN
-    #define FOCUS_DIR_PIN PB3
+#ifndef ALT_DIR_PIN
+    #define ALT_DIR_PIN PB3
 #endif
-#ifndef FOCUS_EN_PIN
-    #define FOCUS_EN_PIN PB5  // active LOW
+#ifndef ALT_EN_PIN
+    #define ALT_EN_PIN PB5  // active LOW
 #endif
-#ifndef FOCUS_SERIAL_PORT_TX
-    #define FOCUS_SERIAL_PORT_TX PC11
+#ifndef ALT_DIAG_PIN
+    #define ALT_DIAG_PIN PB1  // Z+ / probe endstop, spare
 #endif
-#ifndef FOCUS_SERIAL_PORT_RX
-    #define FOCUS_SERIAL_PORT_RX PC11
+#ifndef ALT_SERIAL_PORT_TX
+    #define ALT_SERIAL_PORT_TX PC11
 #endif
-#ifndef FOCUS_DRIVER_ADDRESS
-    #define FOCUS_DRIVER_ADDRESS 0b00
+#ifndef ALT_SERIAL_PORT_RX
+    #define ALT_SERIAL_PORT_RX PC11
+#endif
+#ifndef ALT_DRIVER_ADDRESS
+    #define ALT_DRIVER_ADDRESS 0b00
 #endif
 
 // All drivers use software serial (one pin each).
@@ -164,7 +140,7 @@
     #define BEEPER_PIN PC1
 #endif
 
-// ── ULN2003 groups (28BYJ-48), moved off the LCD pins; used by slice 3 ───────
+// ── ULN2003 groups (28BYJ-48, unipolar), moved off the LCD pins; group A unused ─
 #define ULN_A_PIN1 PB13
 #define ULN_A_PIN2 PB14
 #define ULN_A_PIN3 PB15
@@ -173,6 +149,20 @@
 #define ULN_B_PIN2 PC4
 #define ULN_B_PIN3 PC5
 #define ULN_B_PIN4 PC10
+
+// ── FOCUS axis (ULN2003 board on group B: IN1..IN4; 5 V and GND from EXP1 10/9) ─
+#ifndef FOCUS_ULN_PIN1
+    #define FOCUS_ULN_PIN1 ULN_B_PIN1  // EXP1 6
+#endif
+#ifndef FOCUS_ULN_PIN2
+    #define FOCUS_ULN_PIN2 ULN_B_PIN2  // EXP1 7
+#endif
+#ifndef FOCUS_ULN_PIN3
+    #define FOCUS_ULN_PIN3 ULN_B_PIN3  // EXP1 8
+#endif
+#ifndef FOCUS_ULN_PIN4
+    #define FOCUS_ULN_PIN4 ULN_B_PIN4  // EXP2 7
+#endif
 
 // ── Serial ports ─────────────────────────────────────────────────────────────
 // Serial = USART1 on USB (SERIAL_BAUDRATE). Serial2 = USART2 PA2 TX / PA3 RX to the bridge.

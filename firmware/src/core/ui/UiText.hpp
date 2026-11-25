@@ -127,6 +127,7 @@ enum class TextId : uint8_t
     FaultRa,
     FaultDec,
     FaultDriver,
+    FaultAlt,  // Adjust: the ALT driver failed its UART test
     FaultMount,
     MotorsStopped,
     DateTimeLost,
