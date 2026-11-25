@@ -76,6 +76,11 @@ file. Slices and their order: `docs/architecture.md` §8.
   (`f_serial.hpp`, `MeadeParserSet.cpp`, `SiderealClock.cpp`, `Configuration_adv.hpp`); only native tests and
   `robin_e3` run in the gate. Run them once those toolchains are installed, or rely on upstream CI.
 - iPhone hotspot with no cellular signal in the field: does it stay up? Test before slice 4.
+  2026-11-25: sources say iPhone Personal Hotspot depends on cellular data (may broadcast but refuse
+  joins without it); Android hotspots generally run without signal. Proposed fallback, revisits the
+  "no ESP32 access point" decision: the bridge tries the phone hotspot, and if none appears within
+  ~20 s starts its own access point; camera and phone join it (no internet needed, HTTPS with the
+  project CA unchanged). Weighs toward an S3 bridge (AP + TLS + several clients) over a C3.
 - Camera (2026-11-25): wanted as a live viewer and for long exposures, placed at the eyepiece.
   ESP32 OV-series sensors (OV2640/OV5640) are webcam parts: small pixels, noisy, IR-cut filter, JPEG,
   short maximum exposure (exact limit unchecked, depends on the sensor driver), so live view of
@@ -86,3 +91,30 @@ file. Slices and their order: `docs/architecture.md` §8.
   IMX462 at prime focus for real RAW long exposures, serving images to the PWA over WiFi, with the
   ESP32-S3 kept as the LX200 bridge (~2 W more). Video needs WiFi on Android too (BLE is too slow).
   Decide before the bridge/PWA slices.
+  2026-11-25: goal is faint objects; user rules out a Raspberry Pi (software upkeep), ESP32 only.
+  Images go to the camera board's own SD card, never through the Robin (UART 11-200 KB/s, 48 KB RAM,
+  step timer). XIAO ESP32S3 Sense not sold in Turkey: use any ESP32-S3 camera board with 8 MB octal
+  PSRAM (N8R8/N16R8), a 24-pin DVP camera socket, a microSD slot and USB-C (e.g. Freenove
+  ESP32-S3-WROOM CAM or a generic "ESP32-S3 CAM N16R8"). Next: camera spike on that board + OV5640 (fixed focus): measure the longest
+  exposure the esp32-camera driver allows (low XCLK/PCLK, long VTS), RAW noise, and live-stack ~100
+  frames on a bright DSO (M42, M13). Also try a UVC low-light camera (IMX291/IMX462) on the S3's USB
+  host (full-speed only, may not enumerate). Decide the camera from the measurements.
+  Split idea (2026-11-25): bridge = cheap ESP32-C3 module (e.g. "C3 SuperMini", WiFi + BLE 5, no PSRAM)
+  wired to J24 at the Robin, LX200 byte pipe only; camera = its own board at the focuser, power-only
+  cable, WiFi to the phone. Check the C3 has RAM for the iPhone HTTPS/WSS server (mbedTLS per session)
+  before committing; the S3 is the fallback bridge.
+  Camera features to plan (2026-11-25): three modes switched from the app. (1) Live view: JPEG stream,
+  ~15-30 fps at 640x480, slower at higher resolution; at night frame rate = 1/exposure. (2) Focus aid:
+  full-resolution crop around a star with a star-width (HFD/FWHM) number, driving the Focus motor
+  from the app. (3) Capture: RAW (driver `PIXFORMAT_RAW`, 8-bit over the DVP bus; confirm the Bayer
+  order) to the camera's SD card, independent of the phone; the phone live-stacks binned/cropped frames
+  (WebGL/WebGPU, star alignment) and fetches missed frames when it wakes (PWAs and iOS native apps are
+  suspended in the background). Full RAWs stacked later in Siril. Optional: running stack on the
+  camera in PSRAM. Spike also measures: WiFi throughput (~1-2 MB/s expected) and live-view rate over
+  HTTPS/WSS with the project CA (an HTTPS page cannot load a plain-HTTP stream).
+  Network: everything joins the phone's hotspot. ESP32 is 2.4 GHz only (iPhone: "Maximize
+  Compatibility" on); iPhone hotspot switches off with no clients, so bridge and camera auto-reconnect;
+  Android Chrome resolves .local poorly, so discovery needs a fallback. The camera needs WiFi on Android
+  too, so revisit the Web Bluetooth path (keep as fallback or drop). Stellarium (mobile or desktop on
+  the same hotspot) talks LX200 over TCP to the bridge; the bridge must serialise commands from several
+  clients (app + Stellarium), one command in flight.
