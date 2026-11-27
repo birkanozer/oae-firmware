@@ -10,7 +10,7 @@ const SettingRow kRows[] = {
     {SettingId::Language, TextId::LangRow, SettingType::Enum, 0, 1, 0},
     {SettingId::MinAlt, TextId::MinAlt, SettingType::Int, -10, 30, 0},
     {SettingId::Beep, TextId::BeepRow, SettingType::Bool, 0, 1, 1},
-    {SettingId::Supply, TextId::SupplyRow, SettingType::Enum, 0, 3, 3},
+    {SettingId::Supply, TextId::SupplyRow, SettingType::Enum, 0, 4, 0},  // Auto (no sense input: mirrored)
     {SettingId::OwnWifi, TextId::NetOwnWifi, SettingType::Enum, 0, 2, 0},
 };
 
@@ -44,12 +44,13 @@ void UiSettings::save(uint8_t *out) const
 
 bool UiSettings::load(const uint8_t *in)
 {
+    const bool legacy = in[0] == kLegacyMarker, ok = in[0] == kStoreMarker || legacy;
     for (const SettingRow &r : kRows)
     {
-        const int8_t v = static_cast<int8_t>(in[1 + static_cast<uint8_t>(r.id)]);
-        _v[static_cast<uint8_t>(r.id)] = (in[0] == kStoreMarker && v >= r.min && v <= r.max) ? v : r.def;
+        const int v = static_cast<int8_t>(in[1 + static_cast<uint8_t>(r.id)]) + (legacy && r.id == SettingId::Supply);
+        _v[static_cast<uint8_t>(r.id)] = static_cast<int8_t>((ok && v >= r.min && v <= r.max) ? v : r.def);
     }
-    return in[0] == kStoreMarker;
+    return ok;
 }
 
 bool SettingsStoreLatch::observe(const uint8_t *block)

@@ -164,6 +164,12 @@
     #define FOCUS_ULN_PIN4 ULN_B_PIN4  // EXP2 7
 #endif
 
+// ── Supply sense (SUPPLY_SENSE) ──────────────────────────────────────────────
+// Bed-thermistor socket J8 (TB): divider from the supply, R20 4.7k pull-up to 3.3 V and R21 100R on the board.
+#ifndef SUPPLY_SENSE_PIN
+    #define SUPPLY_SENSE_PIN PA1
+#endif
+
 // ── Serial ports ─────────────────────────────────────────────────────────────
 // Serial = USART1 on USB (SERIAL_BAUDRATE). Serial2 = USART2 PA2 TX / PA3 RX to the bridge.
 #ifndef DEBUG_SERIAL_PORT

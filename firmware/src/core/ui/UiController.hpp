@@ -61,7 +61,11 @@ struct MountSnapshot
     uint8_t slewRate;  // 1..4
     bool dateSet, timeSet, rebooted, synced;
     uint8_t faultCode;  // 0 = none
-    uint8_t supplyVoltage;  // 12, 15, 20 or 24 (0 = unknown, shown as the default)
+    uint8_t supplyVoltage;  // applied: 12, 15, 20 or 24 (0 = unknown, shown as the default)
+    // Supply sense (SUPPLY_SENSE): built in, smoothed reading in mV (0 = none), choice stable for 2 s (0 = none).
+    bool supplySense;
+    uint16_t supplyMv;
+    uint8_t supplyAuto;
     // Adjust page. Arrays are indexed by axis id: 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT (shown RA, DEC, AZ, ALT, Focus).
     // axisPos: current step position (slew-mode steps). stepsPerDeg: 0 = unknown or none (Focus).
     bool hasAz, hasFocus, hasAlt;  // that motor is configured
@@ -123,7 +127,7 @@ class UiController
     bool popAction(UiAction &out);  // FIFO, capacity 8, drops oldest
     void setLastSavedDate(int32_t yyyymmdd);  // prefill (S1b)
     // Persisted Settings: the adapter loads the stored block before the first tick and stores settings() on change.
-    // Returns the stored supply volts to apply, 0 = none (keep SUPPLY_VOLTAGE).
+    // Returns the stored manual supply volts to apply, 0 = none (Auto or no block: keep SUPPLY_VOLTAGE).
     int loadSettings(const uint8_t *block);
     const UiSettings &settings() const { return _settings; }
 
@@ -228,7 +232,11 @@ class UiController
     static constexpr uint8_t kAxisOrder[kAxes] = {0, 1, 2, 4, 3};  // display order RA, DEC, AZ, ALT, Focus (axis ids)
     void jogStop();
     TextId speedText() const;
-    int supplyVolts() const { return _m.supplyVoltage ? _m.supplyVoltage : kSupplyVolts[_settings.get(SettingId::Supply)]; }
+    int supplyVolts() const
+    {
+        const int8_t s = _settings.get(SettingId::Supply);
+        return _m.supplyVoltage ? _m.supplyVoltage : kSupplyVolts[s ? s - 1 : 3];
+    }
     char letter(bool positive, bool lat) const;
     void formatEdit(char *out, size_t n, FieldKind k, int32_t v) const;
     // state helpers
@@ -264,6 +272,7 @@ class UiController
     void renderRefused(Canvas &c) const;
     void renderAdjust(Canvas &c) const;
     void stepText(char *out, size_t n) const;  // "1000" or "JOG SLOW"
+    void supplyText(char *out, size_t n) const;  // "Auto 15 15.1", "Auto 15 --", "Auto --", "15 V (15.1)" or "15 V"
     void renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const;
     void renderNetwork(Canvas &c) const;
     void header(Canvas &c, const char *left, const char *right, bool inverted = false) const;
@@ -320,6 +329,8 @@ class UiController
 
     UiAction _queue[8];
     uint8_t _qCount = 0;
+    bool _motionPushed = false;  // a motion action was queued in this tick: the snapshot does not show it yet
+    uint8_t _supplyOrigin = 0;  // index in kSupplyVolts where the Supply cycle left Auto: a full lap ends back in Auto
     Input _inputs[kInputs];
     uint8_t _inCount = 0;
 

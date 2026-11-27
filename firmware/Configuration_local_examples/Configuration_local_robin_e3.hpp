@@ -99,6 +99,10 @@
 // Motor supply, 12, 15, 20 or 24 V (also changeable in the LCD Settings).
 #define SUPPLY_VOLTAGE 24
 
+// Supply sense divider on J8 (docs/wiring.md): Settings > Supply Auto picks 12/15/20/24 V from the measurement.
+// Without the divider the row shows Auto -- and the voltage stays at SUPPLY_VOLTAGE.
+#define SUPPLY_SENSE 1
+
 // Ender-3 LCD and knob on the Ender-3 header.
 #define USE_LCD_UI 1
 

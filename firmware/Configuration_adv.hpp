@@ -749,6 +749,24 @@
 #ifndef SUPPLY_12V_SPEED_FACTOR
     #define SUPPLY_12V_SPEED_FACTOR 0.7f
 #endif
+// Supply sense (robin_e3 + USE_LCD_UI): a divider plug on the bed-thermistor socket J8 (SUPPLY_SENSE_PIN, docs/wiring.md)
+// lets Settings > Supply Auto follow the source (e.g. 15 V power bank, 20 V adapter). Vdd is taken as 3.3 V.
+// SUPPLY_SENSE_CAL: meter / shown (calibrate at about 20 V with SUPPLY_SENSE_CAL 1.0, rebuild).
+#ifndef SUPPLY_SENSE
+    #define SUPPLY_SENSE 0
+#endif
+#ifndef SUPPLY_SENSE_RTOP
+    #define SUPPLY_SENSE_RTOP 100000  // ohms, supply + to J8 pin 1
+#endif
+#ifndef SUPPLY_SENSE_RBOT
+    #define SUPPLY_SENSE_RBOT 4700  // ohms, J8 pin 1 to pin 2 (GND)
+#endif
+#ifndef SUPPLY_SENSE_RPULL
+    #define SUPPLY_SENSE_RPULL 4700  // ohms, the board's thermistor pull-up to 3.3 V (R20)
+#endif
+#ifndef SUPPLY_SENSE_CAL
+    #define SUPPLY_SENSE_CAL 1.0f
+#endif
 #ifndef RA_MOTOR_COIL_RESISTANCE
     #define RA_MOTOR_COIL_RESISTANCE 1.6f  // ohms, stock NEMA17
 #endif

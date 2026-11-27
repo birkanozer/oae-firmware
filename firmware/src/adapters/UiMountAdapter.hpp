@@ -5,6 +5,9 @@
     #include "inc/Globals.hpp"
     #include "Mount.hpp"
     #include "core/ui/UiController.hpp"
+    #if SUPPLY_SENSE == 1
+        #include "core/SupplySense.hpp"
+    #endif
 
 // Translates between Mount and the pure UI: fills the snapshot, applies the UI's actions with the
 // same Mount calls the LX200 handlers use. No decisions here.
@@ -32,6 +35,11 @@ class UiMountAdapter
     bool _jogTail         = false;  // released, axes still decelerating
     bool _jogResumeTrack  = false;  // was tracking before the jog
     uint32_t _jogStoppedAt = 0;     // millis() when the axes first stopped in the tail, 0 = not yet
+    #if SUPPLY_SENSE == 1
+    core::SupplyFilter _supply;
+    uint32_t _supplyMs = 0;  // last sample (millis)
+    void sampleSupply(uint32_t nowMs);
+    #endif
 };
 
 #endif

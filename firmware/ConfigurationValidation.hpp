@@ -490,6 +490,10 @@
     #error USE_LCD_UI is only supported on the MKS Robin E3.
 #endif
 
+#if SUPPLY_SENSE == 1 && (BOARD != BOARD_STM32_MKS_ROBIN_E3 || USE_LCD_UI != 1)
+    #error SUPPLY_SENSE needs the MKS Robin E3 and USE_LCD_UI (the Auto setting lives in the LCD Settings).
+#endif
+
 // For OAT, we must have DEC limits defined, otherwise free slew does not work.
 #ifndef OAM
     #ifndef DEC_LIMIT_UP

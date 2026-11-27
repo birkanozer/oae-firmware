@@ -261,7 +261,7 @@ uint8_t UiController::items(Item *out) const
             snprintf(v, sizeof v, "%d%s", (int)_settings.get(SettingId::MinAlt), kDeg);  // S16: 0 not +0
             add(t(TextId::MinAlt), v, false);
             add(t(TextId::BeepRow), t(_settings.get(SettingId::Beep) ? TextId::On : TextId::Off), false);
-            snprintf(v, sizeof v, "%d V", supplyVolts());
+            supplyText(v, sizeof v);
             add(t(TextId::SupplyRow), v, false);
             add(t(TextId::NetworkRow), nullptr, false);  // kNetworkRow
             break;
@@ -277,6 +277,27 @@ uint8_t UiController::items(Item *out) const
     }
     add(t(TextId::Back), nullptr, false);
     return n;
+}
+
+void UiController::supplyText(char *out, size_t n) const
+{
+    const int tenths = (_m.supplyMv + 50) / 100;  // measured, one decimal (integer maths: no float printf)
+    const int applied = _m.supplyVoltage;
+    if (_settings.get(SettingId::Supply) == 0)  // Auto: the applied choice and the measurement (row width: 12 EN, 11 TR)
+    {
+        if (tenths && applied)
+            snprintf(out, n, "%s %d %d.%d", t(TextId::SupplyAuto), applied, tenths / 10, tenths % 10);
+        else if (tenths)
+            snprintf(out, n, "%s %d.%dV", t(TextId::SupplyAuto), tenths / 10, tenths % 10);
+        else if (applied)
+            snprintf(out, n, "%s %d --", t(TextId::SupplyAuto), applied);
+        else
+            snprintf(out, n, "%s --", t(TextId::SupplyAuto));
+    }
+    else if (tenths)
+        snprintf(out, n, "%d V (%d.%d)", supplyVolts(), tenths / 10, tenths % 10);
+    else
+        snprintf(out, n, "%d V", supplyVolts());
 }
 
 void UiController::clickList(uint32_t nowMs)
@@ -419,14 +440,26 @@ void UiController::clickSettings(uint8_t r)
         case SettingId::MinAlt:
             openEditor(Edit::MinAlt, _settings.get(id));
             break;
-        case SettingId::Supply:  // next choice; the row shows the firmware's value once it applied the change
+        case SettingId::Supply:  // Auto, then the applied value and on round the four, back to Auto at the start
         {
             int i = 0;  // a value that is not a choice counts as the last one (24 V)
             while (i < 3 && kSupplyVolts[i] != supplyVolts())
                 ++i;
-            i = (i + 1) % 4;
-            _settings.set(id, i);
-            push(UiAction::Kind::SetSupplyVoltage, kSupplyVolts[i]);
+            int idx;  // next manual choice, 0..3
+            bool toAuto = false;
+            if (_settings.get(id) == 0)
+            {
+                idx = _m.supplySense ? i : 0;  // leaving Auto changes nothing (no sense input: Auto is only a stand-in, go to 12)
+                _supplyOrigin = static_cast<uint8_t>(idx);
+            }
+            else
+            {
+                idx = (i + 1) % 4;
+                toAuto = _m.supplySense && idx == _supplyOrigin;  // no Auto without a sense input
+            }
+            _settings.set(id, toAuto ? 0 : idx + 1);
+            if (!toAuto && kSupplyVolts[idx] != _m.supplyVoltage)
+                push(UiAction::Kind::SetSupplyVoltage, kSupplyVolts[idx]);
             break;
         }
         default:

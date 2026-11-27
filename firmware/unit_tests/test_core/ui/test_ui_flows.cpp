@@ -1037,14 +1037,14 @@ TEST(UiFlowsTest, StoredValueOutOfRangeKeepsItsDefault)
     ASSERT_TRUE(r.load(b));
     EXPECT_EQ(1, r.get(SettingId::Language));
     EXPECT_EQ(0, r.get(SettingId::MinAlt));
-    EXPECT_EQ(3, r.get(SettingId::Supply));
+    EXPECT_EQ(0, r.get(SettingId::Supply));  // Auto
 }
 
 TEST(UiFlowsTest, LoadedSettingsApplyBeforeTheFirstFrame)
 {
     UiSettings s;
     s.set(SettingId::Language, 1);
-    s.set(SettingId::Supply, 0);
+    s.set(SettingId::Supply, 1);  // 12 V
     uint8_t b[UiSettings::kStoreBytes];
     s.save(b);
     Ui u;
@@ -1066,10 +1066,257 @@ TEST(UiFlowsTest, SupplySettingFollowsTheFirmware)
     Ui u;
     u.m.supplyVoltage = 15;
     u.tick();
-    EXPECT_EQ(1, u.ui.settings().get(SettingId::Supply));
+    EXPECT_EQ(2, u.ui.settings().get(SettingId::Supply));
     u.m.supplyVoltage = 18;  // not a choice: unchanged
     u.tick(10);
+    EXPECT_EQ(2, u.ui.settings().get(SettingId::Supply));
+}
+
+// ---------------- Supply Auto (supply sense) ----------------
+
+namespace {
+
+// Status -> Settings, cursor on the Supply row.
+void supplyRow(Ui &u)
+{
+    menu(u, 3);
+    u.turn(4);
+}
+
+void loadBlock(Ui &u, int lang, int supply)
+{
+    UiSettings s;
+    s.set(SettingId::Language, lang);
+    s.set(SettingId::Supply, supply);
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    u.ui.loadSettings(b);
+}
+
+}  // namespace
+
+TEST(UiFlowsTest, SupplyDefaultsToAutoWithSense)
+{
+    Ui u;
+    u.m.supplySense = true;
+    u.tick();
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::Supply));  // not mirrored from the firmware's 24 V
+    supplyRow(u);
+    EXPECT_TRUE(u.inv(row("Supply", "Auto 24 --").c_str()));  // no reading yet: the applied value only
+    EXPECT_EQ(0, u.c.violations);
+}
+
+TEST(UiFlowsTest, SupplyWithoutSenseMirrorsTheFirmware)
+{
+    Ui u;  // no sense: the Auto default turns into the firmware's voltage on the first tick
+    u.m.supplyVoltage = 12;
+    u.tick();
     EXPECT_EQ(1, u.ui.settings().get(SettingId::Supply));
+}
+
+TEST(UiFlowsTest, SupplyCyclesAutoAndTheVoltages)
+{
+    Ui u;
+    u.m.supplySense = true;
+    u.m.supplyVoltage = 12;
+    u.tick();
+    supplyRow(u);
+    u.actions();
+    bool f;
+    const int volts[] = {12, 15, 20, 24};
+    for (int i = 0; i < 4; ++i)  // Auto -> 12 (the applied value) -> 15 -> 20 -> 24
+    {
+        u.click();
+        const UiAction a = get(u, Kind::SetSupplyVoltage, f);
+        EXPECT_EQ(i > 0, f) << i;  // leaving Auto applies nothing new
+        if (f)
+        {
+            EXPECT_EQ(volts[i], a.a);
+        }
+        EXPECT_EQ(i + 1, u.ui.settings().get(SettingId::Supply));
+        u.m.supplyVoltage = static_cast<uint8_t>(volts[i]);
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row("Supply", std::to_string(volts[i]) + " V").c_str())) << volts[i];
+    }
+    u.click();  // 24 -> Auto: nothing to apply until a reading is stable
+    get(u, Kind::SetSupplyVoltage, f);
+    EXPECT_FALSE(f);
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::Supply));
+    EXPECT_TRUE(u.inv(row("Supply", "Auto 24 --").c_str()));
+    EXPECT_EQ(0, u.c.violations);
+}
+
+TEST(UiFlowsTest, LeavingAutoStartsAtTheAppliedVoltage)
+{
+    Ui u;
+    u.m.supplySense = true;
+    u.m.supplyVoltage = 15;
+    u.tick();
+    supplyRow(u);
+    u.actions();
+    bool f;
+    // Auto -> 15 (nothing applied) -> 20 -> 24 -> 12 -> Auto: every value is reachable, a full lap
+    const int volts[] = {15, 20, 24, 12};
+    for (int i = 0; i < 4; ++i)
+    {
+        u.click();
+        const UiAction a = get(u, Kind::SetSupplyVoltage, f);
+        EXPECT_EQ(i > 0, f) << i;
+        if (f)
+        {
+            EXPECT_EQ(volts[i], a.a) << i;
+        }
+        u.m.supplyVoltage = static_cast<uint8_t>(volts[i]);
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row("Supply", std::to_string(volts[i]) + " V").c_str())) << volts[i];
+    }
+    u.click();
+    get(u, Kind::SetSupplyVoltage, f);
+    EXPECT_FALSE(f);
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::Supply));
+}
+
+TEST(UiFlowsTest, SupplyRowShowsTheMeasuredVoltage)
+{
+    for (int lang : {0, 1})
+    {
+        Ui u;
+        u.m.supplySense = true;
+        u.m.supplyVoltage = 15;
+        loadBlock(u, lang, 0);
+        u.m.supplyMv = 15149;
+        u.tick();
+        supplyRow(u);
+        const char *label = lang ? "Besleme" : "Supply";
+        EXPECT_TRUE(u.inv(row(label, lang ? "Oto 15 15.1" : "Auto 15 15.1").c_str())) << lang;
+        u.m.supplyVoltage = 24;
+        u.m.supplyMv = 20049;  // the applied choice is shown next to the measurement
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row(label, lang ? "Oto 24 20.0" : "Auto 24 20.0").c_str())) << lang;
+        u.m.supplyVoltage = 15;
+        u.m.supplyMv = 0;
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row(label, lang ? "Oto 15 --" : "Auto 15 --").c_str())) << lang;
+        u.m.supplyVoltage = 0;  // applied value unknown
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row(label, lang ? "Oto --" : "Auto --").c_str())) << lang;
+        u.m.supplyVoltage = 12;
+        u.click();  // manual 12 V
+        u.m.supplyMv = 29960;
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row(label, "12 V (30.0)").c_str())) << lang;
+        u.m.supplyVoltage = 24;
+        loadBlock(u, lang, 4);
+        u.tick(10);
+        EXPECT_TRUE(u.inv(row(label, "24 V (30.0)").c_str())) << lang;
+        EXPECT_EQ(0, u.c.violations) << lang;
+    }
+}
+
+TEST(UiFlowsTest, SupplyAutoWaitsForTheMoveItsOwnClickStarted)
+{
+    Ui u;
+    u.m.supplySense = true;
+    u.tick();
+    gotoConfirm(u);
+    u.actions();
+    u.m.supplyAuto = 15;  // becomes stable in the very tick of the GO click
+    u.click(700);
+    const auto acts = u.acts();
+    UiAction g;
+    ASSERT_TRUE(Ui::find(acts, Kind::Goto, g));
+    for (const UiAction &a : acts)
+        EXPECT_NE(Kind::SetSupplyVoltage, a.kind);
+    u.m.state = MountState::Slewing;  // the mount reports the slew: still not applied
+    u.tick(10);
+    EXPECT_FALSE(Ui::has(u.actions(), Kind::SetSupplyVoltage));
+    u.m.state = MountState::Tracking;
+    u.tick(10);
+    EXPECT_TRUE(Ui::has(u.actions(), Kind::SetSupplyVoltage));
+}
+
+TEST(UiFlowsTest, SupplyAutoAppliesOnlyWhileNotMoving)
+{
+    Ui u;
+    u.m.supplySense = true;
+    u.m.supplyAuto = 15;
+    u.m.state = MountState::Slewing;
+    u.tick();
+    bool f;
+    for (MountState s : {MountState::Slewing, MountState::Jogging, MountState::Homing, MountState::Parking})
+    {
+        u.state(s);
+        get(u, Kind::SetSupplyVoltage, f);
+        EXPECT_FALSE(f) << static_cast<int>(s);
+    }
+    u.state(MountState::Tracking);  // tracking is fine
+    UiAction a = get(u, Kind::SetSupplyVoltage, f);
+    ASSERT_TRUE(f);
+    EXPECT_EQ(15, a.a);
+    u.m.supplyVoltage = 15;  // applied
+    u.tick(10);
+    get(u, Kind::SetSupplyVoltage, f);
+    EXPECT_FALSE(f);
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::Supply));  // still Auto: switching sources stores nothing
+    u.m.supplyAuto = 0;  // no stable reading: keep 15 V
+    u.state(MountState::Idle);
+    get(u, Kind::SetSupplyVoltage, f);
+    EXPECT_FALSE(f);
+}
+
+TEST(UiFlowsTest, SupplyManualIgnoresTheSense)
+{
+    Ui u;
+    u.m.supplySense = true;
+    loadBlock(u, 0, 3);  // 20 V
+    u.m.supplyVoltage = 20;
+    u.m.supplyAuto = 15;
+    u.state(MountState::Idle);
+    bool f;
+    get(u, Kind::SetSupplyVoltage, f);
+    EXPECT_FALSE(f);
+    EXPECT_EQ(3, u.ui.settings().get(SettingId::Supply));
+}
+
+TEST(UiFlowsTest, LegacySettingsBlockStillLoads)
+{
+    // Before Auto: marker 0xA1 and Supply stored as an index into 12/15/20/24.
+    const int volts[] = {12, 15, 20, 24};
+    for (uint8_t old = 0; old < 4; ++old)
+    {
+        uint8_t b[UiSettings::kStoreBytes];
+        b[0] = 0xA1;
+        b[1 + static_cast<uint8_t>(SettingId::Language)] = 1;
+        b[1 + static_cast<uint8_t>(SettingId::MinAlt)] = static_cast<uint8_t>(-5);
+        b[1 + static_cast<uint8_t>(SettingId::Beep)] = 0;
+        b[1 + static_cast<uint8_t>(SettingId::Supply)] = old;
+        b[1 + static_cast<uint8_t>(SettingId::OwnWifi)] = 2;
+        Ui u;
+        EXPECT_EQ(volts[old], u.ui.loadSettings(b)) << int(old);
+        const UiSettings &s = u.ui.settings();
+        EXPECT_EQ(old + 1, s.get(SettingId::Supply));
+        EXPECT_EQ(1, s.get(SettingId::Language));
+        EXPECT_EQ(-5, s.get(SettingId::MinAlt));
+        EXPECT_EQ(0, s.get(SettingId::Beep));
+        EXPECT_EQ(2, s.get(SettingId::OwnWifi));
+        uint8_t n[UiSettings::kStoreBytes];
+        s.save(n);
+        EXPECT_EQ(UiSettings::kStoreMarker, n[0]);  // stored again in the new layout on the next change
+        EXPECT_NE(0xA1, n[0]);
+    }
+}
+
+TEST(UiFlowsTest, StoredAutoAppliesNoVoltageAtBoot)
+{
+    Ui u;
+    UiSettings s;
+    s.set(SettingId::Supply, 0);
+    uint8_t b[UiSettings::kStoreBytes];
+    s.save(b);
+    EXPECT_EQ(0, u.ui.loadSettings(b));  // keeps SUPPLY_VOLTAGE until a reading is stable
+    u.m.supplySense = true;
+    u.tick();
+    EXPECT_EQ(0, u.ui.settings().get(SettingId::Supply));
 }
 
 // ---------------- Settings > Network ----------------

@@ -183,6 +183,7 @@ const Entry kTable[] = {
     {"No bridge", "Kopru yok"},
     {"Clients", "Istemci"},
     {"Auto", "Otomatik"},
+    {"Auto", "Oto"},
 };
 
 static_assert(sizeof(kTable) / sizeof(kTable[0]) == static_cast<size_t>(TextId::Count), "kTable must match TextId");

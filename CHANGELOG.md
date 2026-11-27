@@ -5,15 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.6.0] - 2026-11-27
 
 ### Added
 
+- Supply voltage auto-detect (`SUPPLY_SENSE 1`, on in the example config): a 100k / 4.7k divider plug on the unused bed-thermistor socket J8 (PA1, `docs/wiring.md`) is read every 500 ms (16 samples, smoothed, Vdd assumed 3.3 V). Settings > Supply gains **Auto** (the default with the sense on and a blank store; upgraded boards keep their manual voltage): it applies 12 / 15 / 20 / 24 V once a reading inside a window (10.5-14.2 / 14.2-16.5 / 18.5-21.5 / 22.5-25.5 V) holds for 2 s, with 0.3 V hysteresis at the 12/15 edge, and only while the mount is not moving; gaps, out-of-range or no valid reading keep the last voltage. The row shows the applied choice and the measurement, `Auto 15 15.1` / `Auto 15 --` (TR `Oto`); leaving Auto starts at the applied voltage, manual rows add the measurement (`15 V (15.1)`). `SUPPLY_SENSE_CAL` for a one-time meter calibration.
 - `hardware/camera-cap/`: parametric OpenSCAD magnetic camera module (replaces the earlier cap and head) on kinematic eyepiece rings: one ring per eyepiece (25 / 12.5 / 8 mm; thumbscrew sleeve, three radial 90 degree V-grooves for 5 mm steel balls, three magnet pockets, key notch, light lip; its height carries the eye relief) and one module (island with balls, magnets, light-tight labyrinth and OV5640 nose; tray for the ESP32-S3 CAM, ULN2003 board and USB-C breakout; wall windows for USB-C and the motor plug; vents; lid). Parts: `ring`, `module_base`, `module_lid`, `assembly`, `exploded`; README with what to buy, magnet polarity and centring.
 - `hardware/camera-arm/`: parametric OpenSCAD swing-away camera arm, a second camera mount next to the cap. Split collar on the Barlow body with a magnet-detented vertical hinge (0 and 90 degrees, printed hard stop at 0), an arm with a vertical dovetail rail (28 mm of Z travel, engraved marks for 25 / 12.5 / 8 mm), a cup with three nylon centring thumbscrews (about +-2 mm) and a light-shield skirt, and an ESP32-S3 CAM plate on the post. Heights and eye relief are estimates until measured.
 
 ### Changed
 
+- LCD settings block marker 0xA1 -> 0xA2 (Supply 0 = Auto, 1..4 = 12/15/20/24 V). An older block still loads with every value kept (its supply index moves up by one); it is rewritten in the new layout on the next change. Downgrading to v0.5.0 or older resets the LCD settings (language, minimum altitude, beep, supply, Own WiFi) to their defaults.
 - Camera module powered by its own Mini-360 buck converter (5.1 V) fed with 15 V over the USB-C cable's VBUS (the Robin no longer powers it); focus stays a stock 5 V 28BYJ-48 on the ULN2003 in the module. Module now 60 x 55.2 x 36.2 mm, about 51 g. Cable safety note updated ("15 V – NOT USB").
 - `hardware/camera-cap/`: compact camera module centred on the optical axis (boards stacked: OV5640, ESP32-S3 CAM, ULN2003 driver; about 60 x 55 x 36 mm and 47 g, centre of mass 2.8 mm off the axis, was 103 x 60 x 27 mm side by side): folded camera ribbon, driver on posts (`driver = "board" | "dip"`), USB-C and the JST-XH motor socket on one end wall (`port_side`); rings unchanged.
 - The focus 28BYJ-48 moves from the Robin's ULN2003 (group B) into the camera module: it plugs into a ULN2003 board there, driven by the ESP32 (decision and power budget in docs only: `docs/wiring.md`, `docs/architecture.md`; ESP32 firmware follows in the bridge slice). The Robin's focus code stays as a fallback.

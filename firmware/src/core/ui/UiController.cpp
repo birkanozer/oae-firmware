@@ -79,8 +79,8 @@ int UiController::loadSettings(const uint8_t *block)
 {
     const bool ok = _settings.load(block);
     _lang = _settings.get(SettingId::Language) ? Lang::TR : Lang::EN;
-    const uint8_t supply = block[1 + static_cast<uint8_t>(SettingId::Supply)];
-    return ok && supply < 4 ? kSupplyVolts[supply] : 0;
+    const int8_t supply = _settings.get(SettingId::Supply);
+    return ok && supply ? kSupplyVolts[supply - 1] : 0;
 }
 
 // ---- actions ----
@@ -101,6 +101,9 @@ void UiController::push(UiAction::Kind k, int32_t a, int32_t b)
         --_qCount;
     }
     _queue[_qCount++] = {k, a, b};
+    using K = UiAction::Kind;
+    if (k == K::Goto || k == K::GoHome || k == K::Park || k == K::JogStart || k == K::MoveSteps)
+        _motionPushed = true;
 }
 
 bool UiController::popAction(UiAction &out)
@@ -556,9 +559,11 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
     const MountState prev = _started ? _m.state : m.state;
     const TextId prevRow0 = _row0;
     _m = m;
-    for (uint8_t i = 0; i < 4; ++i)  // the Supply setting mirrors the firmware's voltage, so that is what gets stored
-        if (kSupplyVolts[i] == m.supplyVoltage)
-            _settings.set(SettingId::Supply, i);
+    _motionPushed = false;
+    if (!(m.supplySense && _settings.get(SettingId::Supply) == 0))
+        for (uint8_t i = 0; i < 4; ++i)  // a manual Supply mirrors the firmware's voltage, so that is what gets stored
+            if (kSupplyVolts[i] == m.supplyVoltage)
+                _settings.set(SettingId::Supply, i + 1);
     if (m.hasTarget)  // the adapter reports the target only while slewing: keep the last one
         _haveTarget = true, _tgtRa = m.targetRaSeconds, _tgtDec = m.targetDecArcSec;
     _row0 = row0Label();
@@ -586,6 +591,12 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
             applyTurn(in.detents, in.extra, in.ms);
     }
     _inCount = 0;
+
+    // Auto: apply the sensed choice once it is stable, never during a move (tracking is fine). After the inputs, so a
+    // GoTo, Home, Park or move started by this very tick (the snapshot cannot show it yet) holds it back.
+    if (m.supplySense && _settings.get(SettingId::Supply) == 0 && m.supplyAuto != 0 && m.supplyAuto != m.supplyVoltage &&
+        !moving() && !_motionPushed)
+        push(UiAction::Kind::SetSupplyVoltage, m.supplyAuto);
 
     if (_jogDir && !within(nowMs, _jogMs, kJogStopMs))  // M4: stop 300 ms after the last detent
         jogStop();

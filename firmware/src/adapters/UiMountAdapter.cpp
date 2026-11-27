@@ -15,7 +15,22 @@ void UiMountAdapter::begin()
     // (The F1 has no brown-out flag: a brown-out reads as power-on.) Cleared so the next boot sees only its own cause.
     _rebooted = (RCC->CSR & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF | RCC_CSR_SFTRSTF | RCC_CSR_LPWRRSTF)) != 0;
     RCC->CSR |= RCC_CSR_RMVF;
+    #if SUPPLY_SENSE == 1
+    analogReadResolution(12);  // the core defaults to 10 bits
+    #endif
 }
+
+    #if SUPPLY_SENSE == 1
+// 16 reads of the divider, main loop only: analogRead re-initialises the ADC each time.
+void UiMountAdapter::sampleSupply(uint32_t nowMs)
+{
+    static constexpr core::SupplyDivider kDivider{SUPPLY_SENSE_RTOP, SUPPLY_SENSE_RBOT, SUPPLY_SENSE_RPULL, SUPPLY_SENSE_CAL};
+    uint32_t raw = 0;
+    for (uint8_t i = 0; i < 16; ++i)
+        raw += analogRead(SUPPLY_SENSE_PIN);
+    _supply.sample(nowMs, core::supplyMillivolts(raw, 16u * 4095u, kDivider), _mount.supplyVoltage());
+}
+    #endif
 
 core::MountState UiMountAdapter::state()
 {
@@ -96,6 +111,17 @@ void UiMountAdapter::fill(core::MountSnapshot &s)
     s.synced          = _synced;
     s.faultCode       = _mount.driverFault();
     s.supplyVoltage   = _mount.supplyVoltage();
+    #if SUPPLY_SENSE == 1
+    const uint32_t now = millis();
+    if (now - _supplyMs >= 500)
+    {
+        _supplyMs = now;
+        sampleSupply(now);
+    }
+    s.supplySense = true;
+    s.supplyMv    = static_cast<uint16_t>(_supply.millivolts());
+    s.supplyAuto  = _supply.stableVolts();
+    #endif
     s.hasAz           = AZ_STEPPER_TYPE != STEPPER_TYPE_NONE;
     s.hasFocus        = FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE;
     s.hasAlt          = ALT_STEPPER_TYPE != STEPPER_TYPE_NONE;

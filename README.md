@@ -69,11 +69,25 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   screen names what is missing; click the warning to go straight to Date, then Time.
 - **GoTo refuses** targets below the minimum altitude or within 15° of the Sun. The refused screen
   returns to the editor with the values kept.
-- **Settings** has language (EN/TR), minimum altitude, beep, and supply (12, 15, 20 or 24 V,
-  default 24 V; 15 V suits USB-PD power banks). Supply sets the TMC2209 starting values and caps slew
+- **Settings** has language (EN/TR), minimum altitude, beep, and supply (Auto, 12, 15, 20 or 24 V,
+  default Auto with the supply sense, else 24 V; 15 V suits USB-PD power banks). Supply sets the TMC2209 starting values and caps slew
   speed at 70 % on 12 V and 87.5 % on 15 V (full speed from 20 V). Language, minimum altitude, beep,
   supply and Own WiFi are kept across power cycles; date and time are not (no clock battery), they come
   from the phone or the LCD.
+- **Supply Auto** (with the supply-sense divider on J8, `SUPPLY_SENSE 1`, see `docs/wiring.md`): the
+  row shows the applied choice and the measured voltage (`Auto 15 15.1`, `Auto 15 --` without a reading;
+  TR `Oto`) and picks 12, 15, 20 or 24 V by itself once a reading inside a window (12: 10.5-14.2, 15: 14.2-16.5,
+  20: 18.5-21.5, 24: 22.5-25.5 V) holds for 2 s, only while the mount is not moving (tracking is fine; any move
+  holds it back), so a USB-PD trigger giving 15 V from a power bank and 20 V from the wall adapter needs no
+  change. Readings between the windows change nothing, and leaving 12 V for 15 V needs 14.5 V (0.3 V hysteresis), so
+  a 12 V battery on charge stays on 12 V. Vdd is assumed to be 3.3 V. A click leaves Auto for the applied voltage (nothing
+  changes), then steps through the other values and back to Auto; manual values ignore the sense input and show the
+  measurement in brackets. Auto is the default with `SUPPLY_SENSE 1` on a blank store; a board upgraded
+  from an older version keeps its stored manual voltage until Auto is picked once. To calibrate (the divider is sensitive,
+  1 % on a resistor is about 0.4 V): with `SUPPLY_SENSE_CAL 1.0` measure the supply with a meter, ideally at about
+  20 V (the wall adapter), read the shown value, set `SUPPLY_SENSE_CAL` = meter / shown (e.g. 1.02; a new value =
+  old x meter / shown) and rebuild and flash. R_top goes to the supply + after the fuse; check R20's tolerance
+  (`docs/wiring.md`).
 - **Settings > Network** shows what the ESP32 bridge reports: mode (Hotspot, Own WiFi, Connecting,
   Off, or No bridge when it has been silent for 5 s), WiFi name, IP address, clients and, in Hotspot
   mode, the signal. Click to change **Own WiFi**: Auto (own access point when no phone hotspot shows

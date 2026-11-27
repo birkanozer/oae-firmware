@@ -196,6 +196,7 @@ enum class TextId : uint8_t
     NetNoBridge,
     NetClients,
     Auto,
+    SupplyAuto,  // Supply row value, short (TR "Oto")
     Count
 };
 

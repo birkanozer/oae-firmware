@@ -11,7 +11,7 @@ enum class SettingId : uint8_t
     Language,  // 0 = EN, 1 = TR
     MinAlt,    // degrees
     Beep,      // 0 off, 1 on (click ticks only; safety beeps stay on)
-    Supply,    // index into kSupplyVolts; shown from the snapshot, changed with SetSupplyVoltage
+    Supply,    // 0 Auto (supply sense), 1..4 = kSupplyVolts[v - 1]; manual: shown from the snapshot, set with SetSupplyVoltage
     OwnWifi,   // 0 Auto (own access point when no hotspot is found), 1 On (always), 2 Off (hotspot only); on Network, read by :XNG
     Count
 };
@@ -44,11 +44,13 @@ class UiSettings
     // Next value for Enum/Bool rows (wraps), the same value for Int rows.
     int8_t next(SettingId id) const;
 
-    // Stored block: a marker byte, then one byte per SettingId (Supply mirrors the firmware's voltage, see UiController::tick).
-    static constexpr uint8_t kStoreMarker = 0xA1;  // never 0x00 (cleared store) or 0xFF (blank chip, failed read)
+    // Stored block: a marker byte, then one byte per SettingId (a manual Supply mirrors the firmware's voltage, see
+    // UiController::tick).
+    static constexpr uint8_t kStoreMarker = 0xA2;  // never 0x00 (cleared store) or 0xFF (blank chip, failed read)
+    static constexpr uint8_t kLegacyMarker = 0xA1;  // before Auto: Supply was 0..3 (loads as 1..4)
     static constexpr uint8_t kStoreBytes = 1 + static_cast<uint8_t>(SettingId::Count);
     void save(uint8_t *out) const;
-    // Always starts from the defaults. False on a blank, cleared or older block (all defaults). A value outside
+    // Always starts from the defaults. False on a blank, cleared or unknown block (all defaults). A value outside
     // its row's range falls back to that row's default.
     bool load(const uint8_t *in);
 

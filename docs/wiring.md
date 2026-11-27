@@ -220,9 +220,40 @@ EXTI lines 0 and 11 are taken by the knob (PB0, PB11); no other pin numbered 0 o
 PB10 and PB11 are no longer reserved for a screen: PB11 is now encoder A, and PB10 is free (the
 filament-runout input is unused).
 
+## Supply sense (J8, bed thermistor, PA1)
+
+The board has no input-voltage sense, so a plug on the unused bed-thermistor socket **J8 (TB)** carries a
+divider (`SUPPLY_SENSE 1`, Settings > Supply **Auto**):
+
+| Part | From | To |
+|---|---|---|
+| R_top 100 kΩ 1 % | supply + **after the 3 A fuse** | J8 pin 1 (PA1 side) |
+| R_bot 4.7 kΩ 1 % | J8 pin 1 | J8 pin 2 (GND) |
+
+On the board: R20 4.7 kΩ pull-up to 3.3 V on the node, R21 100 Ω node → PA1, C20 to GND. The node reads
+about 1.89 V at 12 V, 1.96 V at 15 V, 2.07 V at 20 V, 2.16 V at 24 V and 2.30 V at 30 V (safe). Without
+the divider the pull-up holds PA1 at 3.3 V, read as "not fitted" (`Auto --`).
+
+- Use 1 % resistors and take the supply after the fuse. Fit **R_top at the supply end** (at the fuse tap), so the
+  lead to J8 carries only a 100 kΩ-limited signal: a bare supply lead touching J8 pin 1 would push 12-24 V through
+  R21 (100 Ω) into PA1. Polarity: supply + to R_top only; J8 pin 2 is the board's ground, never the supply. A
+  plug fitted the wrong way round is harmless: it reads invalid (`Auto --`).
+- Measure R_top and R_bot with a meter before fitting and check R20's value and tolerance on your board (cheap
+  boards may fit 5 % parts): the divider is sensitive (1 % on R_bot is about 0.4 V), so use the calibration below.
+- The firmware averages 16 reads every 500 ms, assumes the board's 3.3 V rail (no VREFINT) and only applies a
+  reading inside a window around 12 V (10.5–14.2 V), 15 V (14.2–16.5 V), 20 V (18.5–21.5 V) or 24 V
+  (22.5–25.5 V), once it has held for 2 s and never during a move. Readings in the gaps or out of range show
+  but change nothing. Moving from the applied choice to the other side of the 14.2 V edge needs 0.3 V more
+  (14.5 V up, 13.9 V down), so a 12 V battery on charge (13.2–14.4 V) stays on 12 V.
+- Calibrate once, at about 20 V (the wall adapter, not the power bank: the error is smallest around there): with
+  `SUPPLY_SENSE_CAL 1.0` read the voltage the row shows, measure the supply at the J8 plug's source with a
+  meter, then set `SUPPLY_SENSE_CAL` = meter volts / shown volts (a new value = old x meter / shown if it was not 1.0)
+  and rebuild and flash; it is a compile-time constant. Without a meter the windows still hold with 1 %
+  resistors, but check the row against the supply you plug in.
+
 ## Other
 
 - USB (mini-B) → CH340 → USART1 PA9/PA10 (`Serial`, 19200): LX200 for ASCOM / Stellarium desktop / debug.
 - AT24C32 EEPROM on I²C PB6 SCL / PB7 SDA ⚠ (verify by I²C scan).
-- Power input 12–24 V; set Settings > Supply (12, 15, 20 or 24 V) to match. Unused: heaters PC8/PC9, fan PA8, thermistors PA0/PA1, runout PB10,
+- Power input 12–24 V; set Settings > Supply (Auto with the J8 divider, or 12, 15, 20 or 24 V) to match. Unused: heaters PC8/PC9, fan PA8, thermistor PA0 (PA1 = supply sense), runout PB10,
   SD on SPI2 (EXP2).
