@@ -9,8 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `hardware/camera-cap/`: parametric OpenSCAD camera cap that holds the OV5640 module and the ESP32-S3 CAM board directly on the eyepiece (one cap per eyepiece, 25 / 12.5 / 8 mm, held and centred by three M3 thumbscrews; one camera head that moves between caps with a few mm of height travel). Eye-relief defaults are estimates until measured.
+- `hardware/camera-cap/`: parametric OpenSCAD magnetic camera module (replaces the earlier cap and head) on kinematic eyepiece rings: one ring per eyepiece (25 / 12.5 / 8 mm; thumbscrew sleeve, three radial 90 degree V-grooves for 5 mm steel balls, three magnet pockets, key notch, light lip; its height carries the eye relief) and one module (island with balls, magnets, light-tight labyrinth and OV5640 nose; tray for the ESP32-S3 CAM, ULN2003 board and USB-C breakout; wall windows for USB-C and the motor plug; vents; lid). Parts: `ring`, `module_base`, `module_lid`, `assembly`, `exploded`; README with what to buy, magnet polarity and centring.
 - `hardware/camera-arm/`: parametric OpenSCAD swing-away camera arm, a second camera mount next to the cap. Split collar on the Barlow body with a magnet-detented vertical hinge (0 and 90 degrees, printed hard stop at 0), an arm with a vertical dovetail rail (28 mm of Z travel, engraved marks for 25 / 12.5 / 8 mm), a cup with three nylon centring thumbscrews (about +-2 mm) and a light-shield skirt, and an ESP32-S3 CAM plate on the post. Heights and eye relief are estimates until measured.
+
+### Changed
+
+- The focus 28BYJ-48 moves from the Robin's ULN2003 (group B) into the camera module: it plugs into a ULN2003 board there, driven by the ESP32 (decision and power budget in docs only: `docs/wiring.md`, `docs/architecture.md`; ESP32 firmware follows in the bridge slice). The Robin's focus code stays as a fallback.
 
 ## [v0.5.0] - 2026-11-26
 

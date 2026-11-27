@@ -6,6 +6,7 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Next
 
+- **Camera module fit test.** Print the 12.5 mm ring and the module base (PETG), glue the balls and magnets (polarity rule in `hardware/camera-cap/README.md`), check the module sits on the ring without rocking, the three magnets hold it upside down, the ESP32 / ULN / USB-C boards and the motor plug fit their seats, then measure the real eye relief per eyepiece and edit the table.
 - **v0.5.0 bench test.** Power-cycle: language, min altitude, beep, supply and Own WiFi come back; blank store / `:XFR` loads defaults with no write-back; `:XNM1,2,-60#`, `:XNI…#`, `:XNNMy iPhone#`, `:XNG#` over USART2 with a USB-UART adapter (page shows Hotspot, No bridge after 5 s); the USB-C serial cable (continuity both plug orientations, 220 ohm, ESP32 5 V current).
 - **v0.4.0 bench test.** ALT on the E socket answers at boot (no DRIVER FAULT) and moves in Adjust; AZ and ALT quiet while moving (stealthChop at all speeds); Supply row 12/15/20/24 V. Before wiring the focus ULN2003: meter PC10 (EXP2 7), it may be the SD-card detect line on the board; then check coil order and direction, and that the coils go cold when idle.
 - **Slice 2 bench test (needs the LCD on the Ender-3 header).** Stock 12864 LCD on "Ender-3 EXP1"
@@ -50,6 +51,10 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 - Slice 3 `runtime-config` (settings struct, `:XC` commands).
 - Slice 4 `homing` (microswitch homing, startup sequence).
+- Bridge slice, focus in the camera module (decision 2026-11-26, `docs/wiring.md`): the ESP32 drives the
+  module's ULN2003 (4 GPIOs, pins chosen per board) and serves the LX200 focus commands (`:F...`); LCD
+  focus moves go through a queue on the Robin that the ESP32 picks up in its poll (new `:XN` command). The
+  example config then switches the Robin's focus (ULN group B) off; the Robin focus code stays as a fallback.
 - Telescope: National Geographic (Bresser) 76/700 EQ Newtonian, f/9.2, 1.25" focuser; eyepieces 25,
   12.5, 8 mm; 3x Barlow. Camera plan: OV5640 afocal behind the 12.5 mm (exit pupil 1.4 mm < ~1.5 mm
   module lens opening: full light, ~f/2.6 effective, ~1 deg field in a ~0.9 deg circle, 1.4"/px) or 8 mm

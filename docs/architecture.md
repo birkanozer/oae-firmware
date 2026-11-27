@@ -37,7 +37,7 @@ them), plate solving, autoguiding, a native iOS/Android app.
  Phone does: catalog,             TCP :4030; camera                 ├ TMC2209 E  → ALT   (bipolar 28BYJ-48)
  ephemerides, RA/Dec↔Az/Alt,                                        │
  GPS + time, plane fetch,                                           ├ ULN2003 A (PB13/PB14/PB15/PA15) → unused
- settings UI (EN/TR)                                                ├ ULN2003 B (PA7/PC4/PC5/PC10) → Focus (stock 28BYJ-48)
+ settings UI (EN/TR)                                                ├ ULN2003 B (PA7/PC4/PC5/PC10) → Focus fallback (now in the camera module)
                                                                     ├ endstops X-/Y-/Z-/Z+ (microswitch)
                                                                     ├ stock Ender 3 LCD (ST7920, knob, buzzer)
                                                                     │   on the "Ender-3 EXP1" header
@@ -82,7 +82,8 @@ Upgrade work (later slices):
   generates its settings page from it — the two always show the same settings, names, ranges
   and grouping. Screen-only conveniences (language, beep) are rows too.
 - **ULN2003 driver type** (AccelStepper `HALF4WIRE`) alongside TMC2209, selectable per axis. The
-  focuser already uses it at compile time (`DRIVER_TYPE_ULN2003`, Robin E3 focus only).
+  focuser already uses it at compile time (`DRIVER_TYPE_ULN2003`, Robin E3 focus only). Since 2026-11-26 the
+  focus ULN2003 lives in the camera module and the ESP32 drives it (section 6); this Robin focus is the fallback.
 - **Microswitch homing** for RA, DEC (and AZ). OAT's hall-sensor routine finds both edges of a
   sensor zone and homes to the midpoint — a microswitch pressed by a printed cam of known width
   gives the same two edges, so the routine is reused, with debounce tuned for contacts.
@@ -197,6 +198,15 @@ pipe to the firmware (one client at a time owns it; others are refused):
   The LCD's Settings > Network page shows the status and **No bridge** after 5 s without `:XNM`.
   The values are untrusted (the bridge is a trust boundary): the Robin checks digits, ranges and
   separators strictly and keeps them in fixed buffers.
+
+- **Camera module and focus (decision 2026-11-26, docs only so far).** The ESP32-S3 CAM, its OV5640, a
+  ULN2003 board and the USB-C breakout sit in one magnetic module that snaps onto a kinematic ring left on
+  each eyepiece (`hardware/camera-cap/`). The focus 28BYJ-48 plugs into that ULN2003 and the ESP32 drives it
+  with 4 GPIOs (pins chosen per board in the bridge slice). The ESP32 then serves the LX200 focus commands
+  (`:F...`) from clients, and the LCD's Focus axis through the poll: the Robin queues LCD focus moves and the
+  ESP32 picks them up with its status poll. The Robin's own focus code stays as a fallback and the example
+  config switches it off when the bridge slice lands. Power: about 0.5 A ESP32 + 0.24 A motor = about 0.75 A
+  over the USB-C cable's VBUS ([wiring.md](wiring.md)).
 
 Open risks (spiked in the bridge slice): CORS on the ADS-B APIs from the ESP32 origin, Android
 Chrome's `.local` resolution, and WiFi throughput with the camera streaming.

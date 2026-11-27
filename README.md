@@ -22,7 +22,7 @@ Design and roadmap: [docs/architecture.md](docs/architecture.md). Wiring:
 | `firmware/` | OAT firmware fork, STM32 port (PlatformIO, Arduino/STM32duino) |
 | `bridge/` | ESP32-S3 CAM WiFi bridge: phone hotspot or own access point (PlatformIO, Arduino) |
 | `app/` | Phone PWA (English / Turkish) |
-| `hardware/` | Printed parts: endstop brackets and cams |
+| `hardware/` | Printed parts: endstop brackets and cams, camera module with eyepiece rings, focus motor mount |
 | `backup/` | Factory flash image of the board (git-ignored) |
 
 ## Setup (Windows)

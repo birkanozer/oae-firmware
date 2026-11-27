@@ -23,7 +23,9 @@ Timers: stepper ISR on TIM6 at the lowest interrupt priority; TMC SoftwareSerial
 | E | ALT | PB4 | PB3 | PB5 | PC11 |
 
 The Z socket carries AZ and the E socket carries ALT, both bipolar-modded 28BYJ-48 (below). The focuser
-is not on a socket: it is a stock 28BYJ-48 on a ULN2003 board (ULN group B, below).
+is not on a socket: it is a stock 28BYJ-48 on a ULN2003 board. Since 2026-11-26 that board lives in the
+camera module and is driven by the ESP32 (see "Focus motor in the camera module"); ULN group B on the
+Robin is kept as the fallback.
 
 Motor connectors XH2.54-4P (Ender-3 order ⚠).
 
@@ -37,16 +39,33 @@ pins 6–8 (PA7, PC4, PC5) are available here, as ULN group B; 9/10 are GND and 
 | Group | IN1 | IN2 | IN3 | IN4 | Power |
 |---|---|---|---|---|---|
 | A (unused) | PB13 (EXP2 2) | PB14 (EXP2 1) | PB15 (EXP2 6) | PA15 (EXP2) | ULN 5 V + GND from EXP1 9/10 |
-| B (focus) | PA7 (6) | PC4 (7) | PC5 (8) | PC10 (EXP2 7) | same |
+| B (focus, fallback) | PA7 (6) | PC4 (7) | PC5 (8) | PC10 (EXP2 7) | same |
 
 The 5 V rail on EXP1 is the board's buck output (MP1584, 3 A); two 28BYJ-48 draw ~240 mA each
 at 5 V. 3.3 V logic drives the ULN2003 inputs fine. **PA15 and PB3/PB4 are JTAG pins at reset:
 firmware disables JTAG and keeps SWD.**
 
-## Focus motor: stock 28BYJ-48 on a ULN2003 board (ULN group B)
+## Focus motor in the camera module (decision 2026-11-26)
 
-The unmodified (unipolar, five-wire) 28BYJ-48 plugs into its ULN2003 board as shipped. Wire the
-board to ULN group B:
+The focus 28BYJ-48 (stock, unipolar, five-wire, 5 V) plugs into the ULN2003 board **inside the camera
+module** (`hardware/camera-cap/`), and the ESP32-S3 CAM drives that board with 4 GPIOs:
+
+- Motor plug: through a wall window straight into the ULN board's own socket (or a JST-XH 5-pin
+  header behind the window, `motor_port` in the model).
+- ESP32 pins: IN1..IN4 on four free GPIOs, chosen per board in the bridge slice (the camera, the SD slot
+  and the bridge UART take many; never the board's own USB pins). ULN 5 V and GND come from the module's
+  5 V rail (the USB-C cable's VBUS).
+- Power budget over the USB-C cable's VBUS (the Robin's 5 V rail, MP1584, 3 A): ESP32 with camera and
+  WiFi about 0.5 A + 28BYJ-48 about 0.24 A = about 0.75 A, fine for the cable and the rail.
+- Firmware: the Robin's focus code stays as a fallback. The ESP32 will serve the LX200 focus commands
+  (`:F...`) and the LCD Focus axis (the Robin queues LCD focus moves and the ESP32 picks them up in its
+  poll); the example config switches the Robin's focus off then. None of this is implemented yet
+  (bridge slice, BACKLOG).
+
+## Focus motor fallback: stock 28BYJ-48 on a ULN2003 board on the Robin (ULN group B)
+
+Still built and tested on the Robin side. The unmodified (unipolar, five-wire) 28BYJ-48 plugs into
+its ULN2003 board as shipped. Wire the board to ULN group B:
 
 | ULN2003 board | Robin E3 | Header pin |
 |---|---|---|
@@ -148,7 +167,8 @@ carries serial and 5 V, **not USB**: see the safety note in the [README](../READ
 - One 220 Ω series resistor on each data line, at the Robin end.
 - ESP32 end: two free GPIOs, never the board's own USB-C port. They are chosen per board in the
   bridge slice: on Freenove-style ESP32-S3 CAM boards GPIO 17 and 18 are camera data lines.
-- Power: the Robin's 5 V rail (MP1584, 3 A) feeds the ESP32-S3 CAM (about 0.5 A).
+- Power: the Robin's 5 V rail (MP1584, 3 A) feeds the ESP32-S3 CAM (about 0.5 A) and, since the focus motor
+  moved into the camera module, its ULN2003 and 28BYJ-48 (about 0.24 A): about 0.75 A over the cable's VBUS.
 - The CC1/CC2 pins carry nothing in this link (the breakouts only join the contact rows), so a breakout's own CC resistors do not matter for the serial link. They can make a USB-C charger switch VBUS on if the cable is plugged into one by mistake, which is why the README says never to.
 
 ## Onboard screen (stock Ender 3 LCD ENH12864Z-1) on the "Ender-3 EXP1" header

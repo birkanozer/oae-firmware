@@ -74,3 +74,6 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
   Bluetooth and "no ESP32 access point" decisions.
 - 2026-11-25 One ESP32-S3 CAM on the telescope does camera and bridge, linked to the Robin's USART2
   by a standard USB-C cable carrying serial and 5 V, not USB (`docs/wiring.md`, README safety note).
+- 2026-11-26 Focus 28BYJ-48 plugs into a ULN2003 board inside the camera module (magnetic module on
+  kinematic eyepiece rings, `hardware/camera-cap/`), driven by the ESP32; the Robin's ULN group B focus
+  stays as a fallback.
