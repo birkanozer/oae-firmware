@@ -74,24 +74,68 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   speed at 70 % on 12 V and 87.5 % on 15 V (full speed from 20 V). Language, minimum altitude, beep,
   supply and Own WiFi are kept across power cycles; date and time are not (no clock battery), they come
   from the phone or the LCD.
-- **Supply Auto** (with the supply-sense divider on J8, `SUPPLY_SENSE 1`, see `docs/wiring.md`): the
-  row shows the applied choice and the measured voltage (`Auto 15 15.1`, `Auto 15 --` without a reading;
-  TR `Oto`) and picks 12, 15, 20 or 24 V by itself once a reading inside a window (12: 10.5-14.2, 15: 14.2-16.5,
-  20: 18.5-21.5, 24: 22.5-25.5 V) holds for 2 s, only while the mount is not moving (tracking is fine; any move
-  holds it back), so a USB-PD trigger giving 15 V from a power bank and 20 V from the wall adapter needs no
-  change. Readings between the windows change nothing, and leaving 12 V for 15 V needs 14.5 V (0.3 V hysteresis), so
-  a 12 V battery on charge stays on 12 V. Vdd is assumed to be 3.3 V. A click leaves Auto for the applied voltage (nothing
-  changes), then steps through the other values and back to Auto; manual values ignore the sense input and show the
-  measurement in brackets. Auto is the default with `SUPPLY_SENSE 1` on a blank store; a board upgraded
-  from an older version keeps its stored manual voltage until Auto is picked once. To calibrate (the divider is sensitive,
-  1 % on a resistor is about 0.4 V): with `SUPPLY_SENSE_CAL 1.0` measure the supply with a meter, ideally at about
-  20 V (the wall adapter), read the shown value, set `SUPPLY_SENSE_CAL` = meter / shown (e.g. 1.02; a new value =
-  old x meter / shown) and rebuild and flash. R_top goes to the supply + after the fuse; check R20's tolerance
-  (`docs/wiring.md`).
+- **Supply Auto** picks 12, 15, 20 or 24 V by itself from the supply-sense plug on J8: see
+  [Supply Auto: setup and calibration](#supply-auto-setup-and-calibration) below.
 - **Settings > Network** shows what the ESP32 bridge reports: mode (Hotspot, Own WiFi, Connecting,
   Off, or No bridge when it has been silent for 5 s), WiFi name, IP address, clients and, in Hotspot
   mode, the signal. Click to change **Own WiFi**: Auto (own access point when no phone hotspot shows
   up within about 20 s), On (always its own access point) or Off (phone hotspot only).
+
+## Supply Auto: setup and calibration
+
+The Robin E3 cannot measure its input voltage on its own (its only dividers feed the 5 V regulator), so
+a two-resistor plug on the unused bed-thermistor socket **J8 (TB, PA1)** lets the firmware read it
+(`SUPPLY_SENSE 1`, on in the example config). With a USB-PD trigger such as the ZY12PDN, which gives
+15 V from a power bank and 20 V from a wall adapter on the same setting, the firmware then follows the
+source by itself.
+
+**1. Make the plug** (power off while fitting it; pinout and on-board circuit in `docs/wiring.md`):
+
+| Part | From | To |
+|---|---|---|
+| R_top 100 kΩ, 1 % | supply + (after the 3 A fuse) | J8 pin 1 |
+| R_bot 4.7 kΩ, 1 % | J8 pin 1 | J8 pin 2 (GND) |
+
+A plug in backwards or a missing, open or shorted divider never reads as a valid voltage.
+
+**2. Turn Auto on:** Settings > Supply, click until the row shows `Auto`. A blank board starts in Auto;
+a board upgraded from v0.5.0 or older keeps its manual voltage until Auto is picked once.
+
+**3. Check it:**
+
+- The row shows the applied voltage and the measurement: `Auto 15 15.1` (TR `Oto 15 15.1`), or
+  `Auto 15 --` with no valid reading (no plug), which keeps the last voltage.
+- Power bank: about 15. Wall adapter: about 20.
+- It applies a value once the reading stays 2 s inside that value's window, and only while the mount is
+  not moving (tracking is fine; it never switches in the same moment a GoTo, Home or Park starts):
+
+  | Applies | Reading window |
+  |---|---|
+  | 12 V | 10.5 – 14.2 V |
+  | 15 V | 14.2 – 16.5 V |
+  | 20 V | 18.5 – 21.5 V |
+  | 24 V | 22.5 – 25.5 V |
+
+  Readings between the windows change nothing. Leaving 12 V for 15 V needs 14.5 V (0.3 V hysteresis),
+  so a 12 V lead-acid or LiFePO4 battery on charge (13.2 – 14.4 V) stays on 12 V.
+- A click leaves Auto for the applied voltage (nothing changes), then steps through the other values
+  and back to Auto. Manual values ignore the sense input and show the measurement in brackets,
+  e.g. `15 V (15.1)`.
+
+**4. Calibrate once.** The divider is sensitive (1 % on a resistor is about 0.4 V) and the firmware
+assumes the board's 3.3 V rail exactly, so an uncalibrated reading can be off by about a volt; 12 and
+15 V are the pair most likely to be confused.
+
+1. Run with `SUPPLY_SENSE_CAL 1.0` (the default, `Configuration_adv.hpp`; override it in the local config).
+2. Measure the supply with a meter, ideally at about 20 V (the wall adapter), and note the voltage the
+   Supply row shows at the same time.
+3. Set `SUPPLY_SENSE_CAL` = meter ÷ shown (for example 20.1 ÷ 19.7 = 1.02). To refine a value later:
+   new = old × meter ÷ shown.
+4. Rebuild and flash, then check the shown value against the meter on both the power bank and the
+   adapter.
+
+If the shown value is still far off after calibrating, check the board's R20 pull-up (4.7 kΩ; its
+tolerance enters the reading) and the resistor values in the plug.
 
 ## Robin to ESP32 cable: not USB
 
