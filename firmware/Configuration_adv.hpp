@@ -759,7 +759,7 @@
     #define SUPPLY_SENSE_RTOP 100000  // ohms, supply + to J8 pin 1
 #endif
 #ifndef SUPPLY_SENSE_RBOT
-    #define SUPPLY_SENSE_RBOT 4700  // ohms, J8 pin 1 to pin 2 (GND)
+    #define SUPPLY_SENSE_RBOT 10000  // ohms, J8 pin 1 to pin 2 (GND)
 #endif
 #ifndef SUPPLY_SENSE_RPULL
     #define SUPPLY_SENSE_RPULL 4700  // ohms, the board's thermistor pull-up to 3.3 V (R20)

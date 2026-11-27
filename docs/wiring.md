@@ -228,10 +228,10 @@ divider (`SUPPLY_SENSE 1`, Settings > Supply **Auto**):
 | Part | From | To |
 |---|---|---|
 | R_top 100 kΩ 1 % | supply + **after the 3 A fuse** | J8 pin 1 (PA1 side) |
-| R_bot 4.7 kΩ 1 % | J8 pin 1 | J8 pin 2 (GND) |
+| R_bot 10 kΩ 1 % | J8 pin 1 | J8 pin 2 (GND) |
 
 On the board: R20 4.7 kΩ pull-up to 3.3 V on the node, R21 100 Ω node → PA1, C20 to GND. The node reads
-about 1.89 V at 12 V, 1.96 V at 15 V, 2.07 V at 20 V, 2.16 V at 24 V and 2.30 V at 30 V (safe). Without
+about 2.55 V at 12 V, 2.64 V at 15 V, 2.80 V at 20 V, 2.92 V at 24 V and 3.10 V at 30 V (still below 3.3 V). Without
 the divider the pull-up holds PA1 at 3.3 V, read as "not fitted" (`Auto --`).
 
 - Use 1 % resistors and take the supply after the fuse. Fit **R_top at the supply end** (at the fuse tap), so the

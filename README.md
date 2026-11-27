@@ -94,7 +94,7 @@ source by itself.
 | Part | From | To |
 |---|---|---|
 | R_top 100 kΩ, 1 % | supply + (after the 3 A fuse) | J8 pin 1 |
-| R_bot 4.7 kΩ, 1 % | J8 pin 1 | J8 pin 2 (GND) |
+| R_bot 10 kΩ, 1 % | J8 pin 1 | J8 pin 2 (GND) |
 
 A plug in backwards or a missing, open or shorted divider never reads as a valid voltage.
 

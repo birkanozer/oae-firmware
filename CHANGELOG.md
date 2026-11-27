@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.6.1] - 2026-11-27
+
+### Changed
+
+- Supply-sense divider bottom resistor 10 kΩ instead of 4.7 kΩ (`SUPPLY_SENSE_RBOT 10000`): about 38 ADC counts per volt instead of 28, and only two common parts; 30 V still reads below 3.3 V at PA1.
+
 ## [v0.6.0] - 2026-11-27
 
 ### Added
