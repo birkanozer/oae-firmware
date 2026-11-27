@@ -186,8 +186,11 @@
 #ifndef RA_WHEEL_CIRCUMFERENCE
     #define RA_WHEEL_CIRCUMFERENCE 704.97f
 #endif
+// OAE DEC is a geared motor with no belt: DEC_STEPPER_SPR below already holds the whole reduction, so the
+// transmission is 1. Not written as wheel / pulley teeth: Configuration.hpp defines DEC_PULLEY_TEETH 16 before this
+// file is included, so upstream's (DEC_WHEEL_CIRCUMFERENCE / DEC_PULLEY_TEETH) gave 1/16 and 125 steps/deg instead of 2000.
 #ifndef DEC_TRANSMISSION
-    #define DEC_TRANSMISSION (DEC_WHEEL_CIRCUMFERENCE / (DEC_PULLEY_TEETH * 1.0))
+    #define DEC_TRANSMISSION 1.0f
 #endif
 #ifndef RA_LIMIT_LEFT
     #define RA_LIMIT_LEFT 5.0f

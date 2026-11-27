@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.6.2] - 2026-11-28
+
+### Fixed
+
+- DEC moved only about 8 degrees of its 135 degree limits on the Robin E3: `DEC_TRANSMISSION` came out as 1/16 because `Configuration.hpp` sets `DEC_PULLEY_TEETH 16` before the board file's OAE default of 1, giving 125 instead of 2000 DEC steps per degree. The Robin E3 board file now sets `DEC_TRANSMISSION 1.0f` (OAE DEC is a geared motor, no belt). AZ (64 054 steps/deg) and ALT (59 479 steps/deg) were checked on the board and are correct.
+
 ## [v0.6.1] - 2026-11-27
 
 ### Changed
