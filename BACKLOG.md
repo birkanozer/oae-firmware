@@ -6,7 +6,7 @@ file. Slices and their order: `docs/architecture.md` §8.
 
 ## Next
 
-- **Supply sense bench test.** Fit the J8 divider (100k from the supply after the fuse, 4.7k to GND, 1 %), check PA1 stays below 3.3 V at the highest supply, compare the shown `Auto` voltage with a meter on the power bank (15 V) and the wall adapter (20 V) and set `SUPPLY_SENSE_CAL` if it is off by more than ~0.3 V; check Auto switches 15 <-> 20 within a few seconds while idle or tracking but waits during a slew; check `Auto --` without the plug and that an old settings block (v0.5.0) keeps its values after the upgrade.
+- **Supply sense bench test.** Fit the J8 divider (100k from the supply after the fuse, 10k to GND, 1 %), check PA1 stays below 3.3 V at the highest supply, compare the shown `Auto` voltage with a meter on the power bank (15 V) and the wall adapter (20 V) and set `SUPPLY_SENSE_CAL` if it is off by more than ~0.3 V; check Auto switches 15 <-> 20 within a few seconds while idle or tracking but waits during a slew; check `Auto --` without the plug and that an old settings block (v0.5.0) keeps its values after the upgrade.
 - **Camera module fit test.** Print the 12.5 mm ring and the module base (PETG), glue the balls and magnets (polarity rule in `hardware/camera-cap/README.md`), check the module sits on the ring without rocking, the three magnets hold it upside down, the ESP32 / ULN / USB-C boards and the motor plug fit their seats, then measure the real eye relief per eyepiece and edit the table.
 - **v0.5.0 bench test.** Power-cycle: language, min altitude, beep, supply and Own WiFi come back; blank store / `:XFR` loads defaults with no write-back; `:XNM1,2,-60#`, `:XNI…#`, `:XNNMy iPhone#`, `:XNG#` over USART2 with a USB-UART adapter (page shows Hotspot, No bridge after 5 s); the USB-C serial cable (continuity both plug orientations, 220 ohm, ESP32 5 V current).
 - **v0.4.0 bench test.** ALT on the E socket answers at boot (no DRIVER FAULT) and moves in Adjust; AZ and ALT quiet while moving (stealthChop at all speeds); Supply row 12/15/20/24 V. Before wiring the focus ULN2003: meter PC10 (EXP2 7), it may be the SD-card detect line on the board; then check coil order and direction, and that the coils go cold when idle.
@@ -79,6 +79,18 @@ file. Slices and their order: `docs/architecture.md` §8.
 ## Bugs
 
 - Step move during a GoTo started from idle makes the GoTo end idle (accepted in point-adjust).
+- Adjust page (bench, 2026-11-28, v0.6.2):
+  - Long press back from the Adjust options page (Step size, Sync on target, Set home here, Go home)
+    returns to the main menu instead of the Adjust page.
+  - Stopping a move on the Adjust page (click while moving) must stay on the Adjust page.
+  - Step size is shared by all axes: make it per axis, with options and speeds that suit each axis
+    (RA/DEC 2000 and 1762 steps/deg on NEMA17, AZ 64 054 and ALT 59 479 steps/deg on 28BYJ-48; today the
+    largest step, 10 000, is 5 deg on DEC but 0.16 deg on AZ). Drop the Jog (SLOW/CENTER/FIND/MAX) options.
+  - DEC skips too many steps when moving. Suspects: speed (DEC_SLEWING_SPEED_DEG 4 deg/s x 2000 steps/deg
+    = 8000 steps/s, above the 5 kHz stepper ISR) and acceleration now that DEC is 16x finer than before
+    the v0.6.2 fix; torque at 75 % of 470 mA; spreadCycle switch at TMC_TPWMTHRS.
+  - ALT skips too much. Suspects: speed 400 full steps/s (6400 microsteps/s, also above the ISR rate)
+    is near the 28BYJ-48's limit at 91 mA; acceleration; load on the ALT rod.
 
 - `robin_e3` core runs at 64 MHz (measured over SWD) while `F_CPU` says 72 MHz, likely HSI instead of the 8 MHz HSE crystal. LCD DWT delays use `F_CPU` (12.5 % long, harmless); switch them to `SystemCoreClock` and consider running the PLL from HSE at 72 MHz.
 
