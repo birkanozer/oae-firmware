@@ -168,7 +168,7 @@ Exact bracket geometry is a hardware task once the switches are in hand
 
 One **ESP32-S3 CAM** board (8 MB PSRAM) on the telescope does camera and bridge. Arduino on
 PlatformIO (FreeRTOS underneath). It is linked to the Robin's USART2 by a **standard USB-C cable
-that carries serial and the Robin's 5 V, not USB** (two free GPIOs at the ESP32 end, 220 Ω on each
+that carries serial and 15 V (the camera module's own Mini-360 makes 5.1 V from it), not USB** (two free GPIOs at the ESP32 end, 220 Ω on each
 data line at the Robin end; [wiring.md](wiring.md), safety note in the README). WiFi feeds one byte
 pipe to the firmware (one client at a time owns it; others are refused):
 
@@ -206,7 +206,8 @@ pipe to the firmware (one client at a time owns it; others are refused):
   (`:F...`) from clients, and the LCD's Focus axis through the poll: the Robin queues LCD focus moves and the
   ESP32 picks them up with its status poll. The Robin's own focus code stays as a fallback and the example
   config switches it off when the bridge slice lands. Power: about 0.5 A ESP32 + 0.24 A motor = about 0.75 A
-  over the USB-C cable's VBUS ([wiring.md](wiring.md)).
+  at 5.1 V from the module's own Mini-360, fed with 15 V (about 0.3 A) over the USB-C cable's VBUS
+  ([wiring.md](wiring.md)).
 
 Open risks (spiked in the bridge slice): CORS on the ADS-B APIs from the ESP32 origin, Android
 Chrome's `.local` resolution, and WiFi throughput with the camera streaming.

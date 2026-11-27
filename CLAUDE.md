@@ -77,3 +77,5 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
 - 2026-11-26 Focus 28BYJ-48 plugs into a ULN2003 board inside the camera module (magnetic module on
   kinematic eyepiece rings, `hardware/camera-cap/`), driven by the ESP32; the Robin's ULN group B focus
   stays as a fallback.
+- 2026-11-27 The camera module has its own Mini-360 buck (5.1 V), fed with 15 V (fused PD-trigger output)
+  over the cable's VBUS; the Robin no longer powers it. Focus stays a stock 5 V 28BYJ-48 on the ULN2003.

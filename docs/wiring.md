@@ -45,18 +45,18 @@ The 5 V rail on EXP1 is the board's buck output (MP1584, 3 A); two 28BYJ-48 draw
 at 5 V. 3.3 V logic drives the ULN2003 inputs fine. **PA15 and PB3/PB4 are JTAG pins at reset:
 firmware disables JTAG and keeps SWD.**
 
-## Focus motor in the camera module (decision 2026-11-26)
+## Focus motor in the camera module (decision 2026-11-26, power amended 2026-11-27)
 
 The focus 28BYJ-48 (stock, unipolar, five-wire, 5 V) plugs into the ULN2003 board **inside the camera
 module** (`hardware/camera-cap/`), and the ESP32-S3 CAM drives that board with 4 GPIOs:
 
-- Motor plug: through a wall window straight into the ULN board's own socket (or a JST-XH 5-pin
-  header behind the window, `motor_port` in the model).
+- Motor plug: a JST-XH 5-pin side-entry header in the module's end wall (cradle and window in the model);
+  its five pins are wired to the ULN board's motor socket with a short pigtail.
 - ESP32 pins: IN1..IN4 on four free GPIOs, chosen per board in the bridge slice (the camera, the SD slot
   and the bridge UART take many; never the board's own USB pins). ULN 5 V and GND come from the module's
-  5 V rail (the USB-C cable's VBUS).
-- Power budget over the USB-C cable's VBUS (the Robin's 5 V rail, MP1584, 3 A): ESP32 with camera and
-  WiFi about 0.5 A + 28BYJ-48 about 0.24 A = about 0.75 A, fine for the cable and the rail.
+  own 5.1 V rail (the Mini-360 buck converter, below), not from the Robin.
+- Power budget: ESP32 with camera and WiFi about 0.5 A + 28BYJ-48 about 0.24 A = about 0.75 A at 5.1 V
+  (3.8 W), which is about 0.3 A at 15 V in the cable (see the bridge section).
 - Firmware: the Robin's focus code stays as a fallback. The ESP32 will serve the LX200 focus commands
   (`:F...`) and the LCD Focus axis (the Robin queues LCD focus moves and the ESP32 picks them up in its
   poll); the example config switches the Robin's focus off then. None of this is implemented yet
@@ -155,20 +155,38 @@ INPUT_PULLUP. PA11/PA12 are also the MCU's USB pins: unused, USB goes via the CH
 USART2 (`Serial2`) at 115200 baud, 3.3 V logic both sides, no level shifter. The ESP32-S3 CAM sits
 on the telescope and is linked to the Robin by a **standard USB-C (USB 2.0) cable** between two
 USB-C breakout boards that join both contact rows (the plug works either way round). The cable
-carries serial and 5 V, **not USB**: see the safety note in the [README](../README.md).
+carries serial and **15 V** (power for the camera module), **not USB**: see the safety note in the
+[README](../README.md).
 
 | USB-C line | Robin E3 end | ESP32-S3 CAM end |
 |---|---|---|
-| VBUS | 5 V (EXP1 pin 10) | 5V pin |
-| GND | GND (EXP1 pin 9) | GND |
+| VBUS | **15 V** from the fused PD-trigger output (after the 3 A fuse), not the Robin's EXP1 pin 10 | Mini-360 IN+ (never the ESP32's 5V pin) |
+| GND | GND (the Robin's GND, EXP1 pin 9; common with the 15 V return) | Mini-360 IN-, which is the module's ground |
 | D+ | PA2 (USART2 TX), NeoPixel header, through 220 Ω | RX: a free GPIO |
 | D- | PA3 (USART2 RX), J24 BLTouch servo (GND, VCC, PA3 ⚠ order), through 220 Ω | TX: a free GPIO |
 
 - One 220 Ω series resistor on each data line, at the Robin end.
 - ESP32 end: two free GPIOs, never the board's own USB-C port. They are chosen per board in the
   bridge slice: on Freenove-style ESP32-S3 CAM boards GPIO 17 and 18 are camera data lines.
-- Power: the Robin's 5 V rail (MP1584, 3 A) feeds the ESP32-S3 CAM (about 0.5 A) and, since the focus motor
-  moved into the camera module, its ULN2003 and 28BYJ-48 (about 0.24 A): about 0.75 A over the cable's VBUS.
+- Power: the Robin no longer powers the module. A **Mini-360 buck converter** (MP2307 type, about 17 x 11 x 4 mm,
+  input up to about 23 V, set to **5.1 V**) sits inside the camera module (`hardware/camera-cap/`). It is
+  fed with the system's 15 V (USB-PD trigger output, after the 3 A fuse) over the cable's VBUS and makes 5.1 V
+  for the ESP32-S3 CAM (about 0.5 A) and the ULN2003 + 28BYJ-48 (about 0.24 A): about 0.75 A at 5 V, about 0.3 A at
+  15 V in the cable (3.8 W, about 88 % efficient, about 0.5 W heat in the box, behind the wall vents).
+- Camera end: cable VBUS -> Mini-360 IN+; Mini-360 OUT+ (5.1 V) -> ESP32 5V pin and ULN2003 +; grounds
+  join at the Mini-360 (IN- and OUT- are one node).
+- Filter at the output: **100 uF electrolytic (16 V or more, 8 x 12 mm) plus 10 uF ceramic** across OUT+ / OUT-,
+  soldered at the Mini-360's output pads.
+- **Set 5.1 V before connecting anything**: the Mini-360's factory output can be anywhere up to the input
+  voltage and would destroy the ESP32. On the bench, power the bare board from the 15 V (nothing on its output
+  but the meter), turn the trim pot until a meter reads 5.10 V (5.0 to 5.2 V is fine), then **seal the pot**
+  (nail varnish or a drop of hot glue). The module has no access hole to the pot.
+- One ground path: the module's ground reaches the Robin only through the cable's GND. Do not tie the
+  module's ground to the telescope, the mount or a second cable; with the ESP32's own USB-C port unplugged there is
+  no other path.
+- Use **22 AWG** for the 15 V tap (supply to the cable's Robin-end breakout) and keep it short (it is
+  already behind the 3 A fuse). The Mini-360's input limit is about 23 V: use it only with the 15 V supply
+  setting, never tap a 20 or 24 V supply.
 - The CC1/CC2 pins carry nothing in this link (the breakouts only join the contact rows), so a breakout's own CC resistors do not matter for the serial link. They can make a USB-C charger switch VBUS on if the cable is plugged into one by mistake, which is why the README says never to.
 
 ## Onboard screen (stock Ender 3 LCD ENH12864Z-1) on the "Ender-3 EXP1" header

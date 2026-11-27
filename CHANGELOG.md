@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Camera module powered by its own Mini-360 buck converter (5.1 V) fed with 15 V over the USB-C cable's VBUS (the Robin no longer powers it); focus stays a stock 5 V 28BYJ-48 on the ULN2003 in the module. Module now 60 x 55.2 x 36.2 mm, about 51 g. Cable safety note updated ("15 V – NOT USB").
+- `hardware/camera-cap/`: compact camera module centred on the optical axis (boards stacked: OV5640, ESP32-S3 CAM, ULN2003 driver; about 60 x 55 x 36 mm and 47 g, centre of mass 2.8 mm off the axis, was 103 x 60 x 27 mm side by side): folded camera ribbon, driver on posts (`driver = "board" | "dip"`), USB-C and the JST-XH motor socket on one end wall (`port_side`); rings unchanged.
 - The focus 28BYJ-48 moves from the Robin's ULN2003 (group B) into the camera module: it plugs into a ULN2003 board there, driven by the ESP32 (decision and power budget in docs only: `docs/wiring.md`, `docs/architecture.md`; ESP32 firmware follows in the bridge slice). The Robin's focus code stays as a fallback.
 
 ## [v0.5.0] - 2026-11-26

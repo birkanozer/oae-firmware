@@ -81,17 +81,21 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
 
 ## Robin to ESP32 cable: not USB
 
-The Robin and the ESP32-S3 CAM are linked by an ordinary USB-C cable, but it carries the board's
-serial port and 5 V, **not USB** (pins in [docs/wiring.md](docs/wiring.md)).
+The Robin and the ESP32-S3 CAM module are linked by an ordinary USB-C cable, but it carries the board's
+serial port and **15 V on VBUS** (the camera module makes its own 5.1 V from it), **not USB** (pins in
+[docs/wiring.md](docs/wiring.md)).
 
-- **Never plug it into a computer, phone, charger or power bank.** That ties their 5 V to the
-  Robin's 5 V rail and puts USB signals on the board's serial pins.
+- **Never plug it into a computer, phone, charger or power bank.** 15 V on a USB port's VBUS can destroy
+  that device, and it puts USB signals on the board's serial pins.
 - **Never plug the cable into the ESP32 board's own USB-C port**, and unplug the link cable before
-  connecting that port to a computer to flash it: the cable ties the Robin's 5 V to the ESP32's 5V pin,
-  which on most boards is also that port's VBUS.
-- **Label both sockets** (for example "OAE LINK, NOT USB"), on the Robin side and on the ESP32 side.
-- The 220 Ω resistors on the data lines limit the damage from a mistaken plug; they do not make it
-  safe.
+  connecting that port to a computer to flash it: 15 V on the ESP32's USB-C port would destroy the board (and
+  the computer behind it).
+- **Label both ends "15 V – NOT USB"**, on the Robin side and on the module.
+- A safer alternative is a **non-USB connector** for this link, for example a GX12 4-pin (aviation)
+  connector or a JST-SM, which nothing else can be plugged into by mistake. Then the label is a second line
+  of defence, not the only one.
+- The 220 Ω resistors on the data lines are unchanged; they limit the damage on the data lines from a
+  mistaken plug, they do not make 15 V on VBUS safe.
 - **Power the Robin off** before connecting or disconnecting the cable.
 
 ## Motor noise (TMC2209)

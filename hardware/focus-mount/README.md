@@ -18,8 +18,9 @@ Four printed parts:
 - **knob_pulley**: split ring with GT2 teeth and flanges, clamps the focus knob (M3 pinch screw).
 - **motor_pulley**: GT2 pulley with a D bore for the double-flat shaft and an M3 grub screw.
 
-The motor plugs into the camera module's JST-XH socket with its own cable (see
-`../../plans/camera-module/design.md`); no wiring on this part.
+The motor's own 5-pin JST-XH plug goes into the side-entry JST-XH socket on the camera module's end wall
+(`../../hardware/camera-cap/`, design in `../../plans/archive/camera-module/design.md`); the module has its own
+Mini-360 5.1 V supply, so there is no wiring on this part.
 
 ## Frames
 
@@ -104,7 +105,10 @@ Do not over-tension: the 28BYJ-48 bearing is plain brass and tolerates only a li
 ## Clearances to check in the assembly
 
 - Motor plate and rails against the Barlow / camera module: the rails and plate stay at x >= about 22 mm
-  and y >= 18 mm; use `motor_angle` (-40 to 40) to move the motor down or up, and `motor_distance` to pull it away.
+  and y >= 18 mm. The camera module (60 x 55 mm in plan, centred on the optical axis, not modelled here) covers
+  that area seen from above, so check the height: rails and plate must stay below the module's underside
+  (and its nose and skirt) with the eyepiece in place. Use `motor_angle` (-40 to 40) to move the motor down or up, and
+  `motor_distance` to pull it away.
 - The lower rail stays above the tube: with a 76 mm tube it is about 1 mm clear at the root; raise
   `motor_angle` or `knob_axis_z` if your tube is larger.
 - Exported checks used here: the bracket does not intersect the focuser block, tube, drawtube, knob,
