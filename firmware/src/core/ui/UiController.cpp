@@ -316,18 +316,18 @@ void UiController::clickScreen(uint32_t nowMs)
             _haveTarget = true, _tgtRa = _ra, _tgtDec = _dec;  // the target for Adjust -> Sync on target
             _screen = Screen::Status;
             break;
-        case Screen::Adjust:  // next axis in display order; AZ, ALT and Focus only when configured
-        {
+        case Screen::Adjust:  // next axis in display order (AZ, ALT and Focus only when configured), then the Options stop
             clickTick();
-            uint8_t i = 0;
-            while (kAxisOrder[i] != _axis)
-                ++i;
-            do
-                i = static_cast<uint8_t>((i + 1) % kAxes);
-            while (!axisFitted(kAxisOrder[i]));
-            _axis = kAxisOrder[i];
+            if (_stop)  // the stop opens the options on the axis last moved
+            {
+                _stop = false;
+                _axis = _moved;
+                _sel = 0;
+                _screen = Screen::AdjustOptions;
+            }
+            else
+                _stop = !nextAxis(false);
             break;
-        }
         case Screen::SetHomeConfirm:
             if (_m.state != MountState::Idle)  // the lock again at the click
             {
@@ -336,9 +336,9 @@ void UiController::clickScreen(uint32_t nowMs)
                 break;
             }
             clickTick();
-            push(_homeAll ? UiAction::Kind::SetHomeAll : UiAction::Kind::SetHome);
+            push(_homeAll ? UiAction::Kind::SetHomeAll : UiAction::Kind::SetHome, 0, _axis);
             showTransient(TextId::HdrHomeSet, kSyncedMs, nowMs);
-            _screen = Screen::Status;
+            _screen = Screen::Adjust;
             break;
         case Screen::Refused:  // S9: back to the RA editor, values kept
             clickTick();
@@ -384,6 +384,7 @@ void UiController::clickMenu(uint32_t nowMs)
             openEditor(Edit::PointRa, _ra);
             break;
         case RowAdjust:  // keeps the last axis and step size
+            _stop = false;
             _screen = Screen::Adjust;
             break;
         case RowSettings:
@@ -416,10 +417,6 @@ void UiController::holdScreen()
             _screen = Screen::Settings;
             _sel = 0;
             break;
-        case Screen::Adjust:  // not moving here (moving is STOP): the options (their long press returns here)
-            _sel = 0;
-            _screen = Screen::AdjustOptions;
-            break;
         case Screen::SetHomeConfirm:
             _screen = Screen::AdjustOptions;
             break;
@@ -427,9 +424,10 @@ void UiController::holdScreen()
             _screen = Screen::Settings;
             _sel = kNetworkRow;
             break;
-        case Screen::AdjustOptions:
+        case Screen::AdjustOptions:  // on the Axis row axis
             _screen = Screen::Adjust;
             break;
+        case Screen::Adjust:  // not moving here (moving is STOP)
         case Screen::Settings:
         case Screen::PointConfirm:
         case Screen::Refused:
@@ -703,7 +701,7 @@ void UiController::renderScreen(Canvas &c) const
             renderRefused(c);
             break;
         case Screen::ClearsSync:
-            renderSmallConfirm(c, TextId::HdrSetup, TextId::ClearsSync);
+            renderSmallConfirm(c, TextId::HdrSetup, t(TextId::ClearsSync));
             break;
         case Screen::Setup:
         case Screen::Settings:
@@ -714,8 +712,13 @@ void UiController::renderScreen(Canvas &c) const
             renderAdjust(c);
             break;
         case Screen::SetHomeConfirm:
-            renderSmallConfirm(c, TextId::HdrHome, _homeAll ? TextId::SetHomeAllQ : TextId::SetHomeQ);
+        {
+            char q[32];
+            homeText(q, sizeof q - 1, _homeAll);
+            strcat(q, "?");
+            renderSmallConfirm(c, TextId::HdrHome, q);
             break;
+        }
         case Screen::Network:
             renderNetwork(c);
             break;

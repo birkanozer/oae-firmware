@@ -89,7 +89,7 @@ struct UiAction
         SetLatitude,
         SetLongitude,
         GoHome,
-        SetHome,
+        SetHome,  // b = axis (0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT)
         SetHomeAll,
         Park,
         Unpark,
@@ -141,7 +141,7 @@ class UiController
         ClearsSync,
         Settings,
         Adjust,  // step moves per detent on the selected axis
-        AdjustOptions,  // step size, sync on target, set home, go home, main menu
+        AdjustOptions,  // axis, step size, sync on target, set home (axis, all), go home
         SetHomeConfirm,
         Network  // under Settings: what the bridge reports, Own WiFi (click cycles it)
     };
@@ -221,6 +221,8 @@ class UiController
     void clickSetup(uint8_t row);
     void clickSettings(uint8_t row);
     void clickAdjustOptions(uint8_t row);
+    bool nextAxis(bool wrap);  // next fitted axis in display order; false at the end when not wrapping
+    void homeText(char *out, size_t n, bool all) const;  // "Set DEC home" or "Set home all"
     void turnAdjust(int8_t detents, uint32_t nowMs);
     TextId optionLock(uint8_t row) const;  // Adjust options: Count = unlocked, else message id
     bool axisFaulted() const { return (_axis == 2 && _m.azFault) || (_axis == 3 && _m.focusFault) || (_axis == 4 && _m.altFault); }
@@ -269,7 +271,7 @@ class UiController
     void renderAdjust(Canvas &c) const;
     void stepText(char *out, size_t n) const;  // "1000"
     void supplyText(char *out, size_t n) const;  // "Auto 15 15.1", "Auto 15 --", "Auto --", "15 V (15.1)" or "15 V"
-    void renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const;
+    void renderSmallConfirm(Canvas &c, TextId hdr, const char *msg) const;
     void renderNetwork(Canvas &c) const;
     void header(Canvas &c, const char *left, const char *right, bool inverted = false) const;
     void footer(Canvas &c, const char *hint) const;
@@ -290,7 +292,7 @@ class UiController
     bool _fastPath = false;  // status alert: Date then Time, applied together
     int32_t _ra = 0, _dec = 0;  // Point values being edited or confirmed
     bool _pointSync = false;  // PointConfirm: false = GO, true = SYNC
-    bool _homeAll = false;  // SetHomeConfirm: false = here (RA/DEC), true = all axes
+    bool _homeAll = false;  // SetHomeConfirm: false = the Axis row's axis, true = all axes
     bool _haveTarget = false;  // last GoTo target latched (the snapshot only reports it while slewing)
     int32_t _tgtRa = 0, _tgtDec = 0;
     int32_t _pendingDate = 0;
@@ -302,7 +304,9 @@ class UiController
     UiAction _pending[2];
     uint8_t _pendingN = 0;
     Screen _ret = Screen::Status;  // after ClearsSync
-    uint8_t _axis = 0;  // Adjust: axis id, 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT
+    uint8_t _axis = 0;  // Adjust: axis id, 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT; the Options rows' axis too (the Axis row sets it)
+    uint8_t _moved = 0;  // the axis last moved by a turn on Adjust: the Axis row starts there
+    bool _stop = false;  // Adjust shows the Options stop (after the last fitted axis) instead of an axis
     uint8_t _stepSel[kAxes] = {2, 2, 2, 2, 2};  // Adjust: index 0..4 into the axis's step list, per axis id
     bool _stepLatch = false;  // own MoveSteps emitted, snapshot not moving yet (cleared on motion or after kStepLatchMs)
     uint32_t _stepMs = 0;

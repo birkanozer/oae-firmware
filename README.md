@@ -60,12 +60,16 @@ into the board's "Ender-3 EXP1" header; pins in [docs/wiring.md](docs/wiring.md)
   `click: STOP`. Turning the knob does nothing during motion, except on the Adjust screen.
 - **Point:** RA, then Dec, then a confirm screen; turn to pick GO or SYNC, click to run it.
 - **Adjust:** turn to move the selected axis (RA, DEC, and AZ, ALT or Focus when fitted) by one step
-  size per detent; click picks the next axis; hold opens the options: step size (each axis keeps
-  its own: RA and DEC 10 to 50 000 steps, AZ and ALT 100 to 300 000, Focus 1 to 10 000), Sync on
-  target, Set home here, Set home all (also zeroes AZ and ALT, kept across power cycles, and Focus until the next boot), Go home and Main menu; hold on the options goes back to Adjust. A click while
-  a move runs stops it and stays on Adjust. The screen shows the axis position and what a step is in degrees. Use it to
-  line the mount up with the OAE markers, then run **Set home here** (only while idle; it works
-  before date and time are set). Sync on target uses the last Point coordinates.
+  size per detent; click picks the next axis, and after the last axis comes an **Options** stop; hold
+  goes back to the main menu. A click while a move runs stops it and stays on Adjust. The screen
+  shows the axis position and what a step is in degrees. Click on the Options stop opens the options:
+  **Axis** (starts on the axis you last moved; click picks another), **Step size** for that axis (RA
+  and DEC 10 to 50 000 steps, AZ and ALT 100 to 300 000, Focus 1 to 10 000), Sync on target,
+  **Set <axis> home** (that axis only), **Set home all** (every axis; AZ and ALT are kept across power
+  cycles, Focus until the next boot) and Go home. Hold or Back on the options, and either home
+  confirm, return to Adjust on the chosen axis. Use it to line the mount up with the OAE markers, then
+  set home (only while idle; it works before date and time are set). Sync on target uses the last
+  Point coordinates.
 - **Point and Track here stay locked** until both date and time are set since boot. The status
   screen names what is missing; click the warning to go straight to Date, then Time.
 - **GoTo refuses** targets below the minimum altitude or within 15° of the Sun. The refused screen

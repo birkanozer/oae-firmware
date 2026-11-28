@@ -3867,10 +3867,64 @@ bool Mount::setHomeAll()
     // Set home here, plus AZ and ALT (zeroed and stored, as upstream does on every stop) and the Focus counter (RAM only).
     setHomeHere();
     setAZALTHome();
-    #if FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE
-    _stepperFocus->setCurrentPosition(0);
-    #endif
+    setHomeAxis(3);
     return true;
+}
+
+void Mount::setHomeAxis(int axis)
+{
+    // Zeroes one axis, moves no motor (axis ids as the UI: 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT). The sky reference is per axis:
+    // RA takes its own (pending without a clock, see setHomeHere), DEC's is always 0, so neither touches the other's.
+    switch (axis)
+    {
+        case 0:
+        {
+            const bool wasTracking = isSlewingTRK();
+            stopSlewing(EAST | WEST);
+            waitUntilStopped(EAST | WEST);
+            if (wasTracking)
+            {
+                startSlewing(TRACKING);
+            }
+            _zeroPosRA = calculateLst();
+            _zeroPosRA.addHours(6);  // same as setHome()
+            _stepperRA->setCurrentPosition(0);
+            _stepperTRK->setCurrentPosition(0);
+            _targetRA             = currentRA();
+            _slewingToHome        = false;
+            _slewingToPark        = false;
+            _homeReferencePending = !(isDateSet() && isTimeSet());
+            break;
+        }
+        case 1:
+            stopSlewing(NORTH | SOUTH);
+            waitUntilStopped(NORTH | SOUTH);
+            _zeroPosDEC = 0.0f;
+            _stepperDEC->setCurrentPosition(0);
+            _stepperGUIDE->setCurrentPosition(0);
+            _slewingToHome = false;
+            _slewingToPark = false;
+            break;
+        case 2:
+    #if (AZ_STEPPER_TYPE != STEPPER_TYPE_NONE)
+            _stepperAZ->setCurrentPosition(0);
+            EEPROMStore::storeAZPosition(0);
+    #endif
+            break;
+        case 3:
+    #if FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE
+            _stepperFocus->setCurrentPosition(0);
+    #endif
+            break;
+        case 4:
+    #if (ALT_STEPPER_TYPE != STEPPER_TYPE_NONE)
+            _stepperALT->setCurrentPosition(0);
+            EEPROMStore::storeALTPosition(0);
+    #endif
+            break;
+        default:
+            break;
+    }
 }
 
 void Mount::applyPendingHomeReference()
@@ -3882,8 +3936,7 @@ void Mount::applyPendingHomeReference()
     }
     _zeroPosRA = calculateLst();
     _zeroPosRA.addHours(6);  // same as setHome(): shift all coordinates by 90 degrees for the EQ mount
-    _zeroPosDEC = 0.0f;
-    _targetRA   = currentRA();
+    _targetRA   = currentRA();  // DEC's reference (0) is never pending: a DEC-only home must survive this
 }
 
 bool Mount::azDriverFailed() const

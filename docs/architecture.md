@@ -106,8 +106,9 @@ logic lives in `src/core/ui/` (host-tested); the STM32 glue is in `src/adapters/
   become the target for Adjust's Sync on target.
 - **Adjust**: turn moves the selected axis (RA, DEC, AZ, ALT, Focus) by exactly one step size per
   detent (no knob acceleration), with a step size list per axis; click picks the axis (a click while a
-  move runs is STOP and stays on Adjust); a long press opens Step size, Sync on target, Set home here,
-  Set home all, Go home and Main menu, and a long press there returns to Adjust. Go home is
+  move runs is STOP and stays on Adjust); after the last axis an Options stop opens Axis, Step size,
+  Sync on target, Set <axis> home (one axis), Set home all, Go home; a long press on Adjust is the main
+  menu, a long press on the options returns to Adjust on the chosen axis. Go home is
   started and polled, so the UI never blocks, and it ends idle at the markers (no tracking, no
   catch-up move). Date and time are not needed.
   The LX200 list below is what the phone uses for the same moves.

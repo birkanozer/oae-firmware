@@ -368,6 +368,7 @@ class Mount
     // is then taken by applyPendingHomeReference() once both are set. Drops any Sync offset. Moves nothing.
     bool setHomeHere();
     bool setHomeAll();
+    void setHomeAxis(int axis);  // zero one axis only: 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT
     void applyPendingHomeReference();
     bool azDriverFailed() const;
     bool altDriverFailed() const;

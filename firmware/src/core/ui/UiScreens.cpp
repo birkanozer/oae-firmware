@@ -22,6 +22,7 @@ constexpr int32_t kStepSizes[5][5] = {{10, 100, 1000, 10000, 50000},
                                       {100, 1000, 10000, 60000, 300000},
                                       {1, 10, 100, 1000, 10000},
                                       {100, 1000, 10000, 60000, 300000}};
+const TextId kAxisNames[5] = {TextId::LabelRa, TextId::LabelDec, TextId::LabelAz, TextId::AxisFocus, TextId::LabelAlt};  // by axis id
 
 int32_t wrapHalfDay(int32_t s)  // seconds -> (-43200, 43200]
 {
@@ -270,13 +271,15 @@ uint8_t UiController::items(Item *out) const
             add(t(TextId::NetworkRow), nullptr, false);  // kNetworkRow
             break;
         case Screen::AdjustOptions:
+            snprintf(v, sizeof v, t(TextId::AxisRow), t(kAxisNames[_axis]));
+            add(v, nullptr, false);
             stepText(v, sizeof v);
             add(t(TextId::StepRow), v, false);
-            add(t(TextId::SyncOnTarget), nullptr, optionLock(1) != TextId::Count);
-            add(t(TextId::SetHomeHere), nullptr, optionLock(2) != TextId::Count);
-            add(t(TextId::SetHomeAll), nullptr, optionLock(3) != TextId::Count);
-            add(t(TextId::GoHome), nullptr, optionLock(4) != TextId::Count);
-            add(t(TextId::MainMenu), nullptr, false);
+            add(t(TextId::SyncOnTarget), nullptr, optionLock(2) != TextId::Count);
+            homeText(v, sizeof v, false);
+            add(v, nullptr, optionLock(3) != TextId::Count);
+            add(t(TextId::SetHomeAll), nullptr, optionLock(4) != TextId::Count);
+            add(t(TextId::GoHome), nullptr, optionLock(5) != TextId::Count);
             break;
         default:
             break;
@@ -337,18 +340,18 @@ void UiController::clickList(uint32_t nowMs)
     }
 }
 
-// Adjust options: 0 Step size, 1 Sync on target, 2 Set home here, 3 Set home all, 4 Go home, 5 Main menu (never locked).
+// Adjust options: 0 Axis, 1 Step size, 2 Sync on target, 3 Set <AXIS> home, 4 Set home all, 5 Go home (then Back).
 // The locks match the rows' dots.
 TextId UiController::optionLock(uint8_t row) const
 {
     switch (row)
     {
-        case 1:  // the last Point target, and the clock for the sky reference
+        case 2:  // the last Point target, and the clock for the sky reference
             return !dateTimeSet() ? TextId::MsgDateTimeFirst : (_haveTarget ? TextId::Count : TextId::MsgNoTarget);
-        case 2:  // the markers: only while nothing moves or tracks
-        case 3:
+        case 3:  // the markers: only while nothing moves or tracks
+        case 4:
             return _m.state == MountState::Idle ? TextId::Count : TextId::MsgStopFirst;
-        case 4:  // from idle or tracking, no clock needed
+        case 5:  // from idle or tracking, no clock needed
             return faultActive() ? faultText() : TextId::Count;
         default:
             return TextId::Count;
@@ -359,33 +362,61 @@ void UiController::clickAdjustOptions(uint8_t r)
 {
     switch (r)
     {
-        case 0:  // next size of the current axis
+        case 0:
+            nextAxis(true);
+            break;
+        case 1:  // next size of the Axis row axis
             _stepSel[_axis] = static_cast<uint8_t>((_stepSel[_axis] + 1) % 5);
             break;
-        case 1:
+        case 2:
             push(UiAction::Kind::Sync, _tgtRa, _tgtDec);
             showTransient(TextId::HdrSynced, kMessageMs, _now);
             _screen = Screen::Status;
             break;
-        case 2:
         case 3:
-            _homeAll = r == 3;
+        case 4:
+            _homeAll = r == 4;
             _screen = Screen::SetHomeConfirm;
             break;
-        case 4:
+        default:
             push(UiAction::Kind::GoHome);
             _screen = Screen::Status;
             break;
-        default:
-            openMenu();
-            break;
     }
+}
+
+bool UiController::nextAxis(bool wrap)
+{
+    uint8_t i = 0;
+    while (kAxisOrder[i] != _axis)
+        ++i;
+    do
+        ++i;
+    while (i < kAxes && !axisFitted(kAxisOrder[i]));
+    if (i == kAxes)
+    {
+        if (!wrap)
+            return false;
+        i = 0;  // RA is always fitted
+    }
+    _axis = kAxisOrder[i];
+    return true;
+}
+
+void UiController::homeText(char *out, size_t n, bool all) const
+{
+    if (all)
+        snprintf(out, n, "%s", t(TextId::SetHomeAll));
+    else
+        snprintf(out, n, t(TextId::SetHomeAxis), t(kAxisNames[_axis]));
 }
 
 // Turn on Adjust: one step size per detent (detents of one tick merge into one move).
 // Never moves an axis whose driver failed.
 void UiController::turnAdjust(int8_t detents, uint32_t nowMs)
 {
+    if (_stop)
+        return;
     if (axisFaulted())
     {
         push(UiAction::Kind::BeepError);
@@ -393,6 +424,7 @@ void UiController::turnAdjust(int8_t detents, uint32_t nowMs)
         return;
     }
     push(UiAction::Kind::MoveSteps, detents * stepSize(), _axis);
+    _moved = _axis;
     _stepLatch = true;  // a click in the same tick must STOP this move, not cycle the axis
     _stepMs = nowMs;
 }
@@ -625,9 +657,12 @@ void UiController::stepText(char *out, size_t n) const
 void UiController::renderAdjust(Canvas &c) const
 {
     char l[48], v[24];
-    const TextId names[kAxes] = {TextId::LabelRa, TextId::LabelDec, TextId::LabelAz, TextId::AxisFocus, TextId::LabelAlt};
-    const bool stopped = _transient == TextId::HdrStopped && within(_now, _transientFrom, _transientMs);  // STOPPED stays on this page
-    header(c, t(stopped ? TextId::HdrStopped : TextId::HdrAdjust), t(names[_axis]));
+    // STOPPED and HOME SET stay on this page, but not on the Options stop (the header is too narrow for both texts)
+    const bool own =
+        !_stop && (_transient == TextId::HdrStopped || _transient == TextId::HdrHomeSet) && within(_now, _transientFrom, _transientMs);
+    header(c, t(own ? _transient : TextId::HdrAdjust), t(_stop ? TextId::Options : kAxisNames[_axis]));
+    if (_stop)
+        return footer(c, t(TextId::FootOptions));
     snprintf(l, sizeof l, "%s %ld", t(TextId::PosRow), (long)_m.axisPos[_axis]);
     c.text(Font::F6x10, 0, 13, l, false);
     stepText(v, sizeof v);
@@ -651,7 +686,7 @@ void UiController::renderAdjust(Canvas &c) const
         const uint8_t a = kAxisOrder[i];
         if (!axisFitted(a))
             continue;
-        const char *name = t(names[a]);
+        const char *name = t(kAxisNames[a]);
         const int16_t w = static_cast<int16_t>(6 * cols(name));
         if (a == _axis)
             c.box(static_cast<int16_t>(x - 1), 32, static_cast<int16_t>(x + w), 41);
@@ -724,10 +759,10 @@ void UiController::renderNetwork(Canvas &c) const
         bar(c, 53, 63, 54, l);
 }
 
-void UiController::renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const
+void UiController::renderSmallConfirm(Canvas &c, TextId hdr, const char *msg) const
 {
     header(c, t(hdr), nullptr);
-    center(c, Font::F7x13B, 17, t(msg), false);
+    center(c, Font::F7x13B, 17, msg, false);
     c.box(0, 36, 127, 46);
     center(c, Font::F6x10, 37, t(TextId::ClickYes), true);
     footer(c, t(TextId::FootCancel));

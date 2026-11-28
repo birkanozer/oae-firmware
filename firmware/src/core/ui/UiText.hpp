@@ -39,7 +39,7 @@ enum class TextId : uint8_t
     Adjust,
     // Home / Park
     GoHome,
-    SetHomeHere,
+    SetHomeAxis,  // format: %s = the axis name
     SetHomeAll,
     // Setup
     Date,
@@ -161,8 +161,6 @@ enum class TextId : uint8_t
     RefInvalid,
     BigJump,
     ClearsSync,
-    SetHomeQ,
-    SetHomeAllQ,
     ShortSun,
     ShortMove,
     Away,
@@ -182,7 +180,9 @@ enum class TextId : uint8_t
     StepRow,
     FootAdjust,
     MsgStopFirst,
-    MainMenu,
+    AxisRow,  // format: %s = the axis name
+    Options,  // the Adjust page's Options stop
+    FootOptions,
     // Settings > Network
     NetworkRow,
     HdrNetwork,

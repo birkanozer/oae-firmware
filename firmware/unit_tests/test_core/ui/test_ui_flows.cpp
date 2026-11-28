@@ -27,6 +27,15 @@ void clicks(Ui &u, int n)
         u.click();
 }
 
+// On Adjust: click on to the Options stop and open the options list (cursor on the Axis row).
+void openOptions(Ui &u)
+{
+    u.tick(400);  // a step move's latch would turn the click into a STOP
+    for (int i = 0; i < 6 && !u.drew("OPTIONS") && !u.drew("SECENEKLER"); ++i)
+        u.click();
+    u.click();
+}
+
 // Status -> Settings -> Setup list.
 void setup(Ui &u)
 {
@@ -1634,17 +1643,17 @@ int walk(Ui &u)
     {
         for (int i = 0; i < 9; ++i)
         {
-            u.hold();  // options (cursor on Step)
+            u.turn(1);  // moves this axis: the options open on it
+            openOptions(u);
+            u.turn(1);
             u.click();  // next size
-            u.hold();  // main menu
-            u.turn(2);
-            u.click();  // Adjust
+            u.hold();  // Adjust
         }
         u.click();  // next axis
     }
-    u.hold();  // options
-    u.turn(2);
-    u.click();  // Set home here: confirm
+    openOptions(u);
+    u.turn(3);
+    u.click();  // Set <AXIS> home: confirm
     u.hold();
     u.state(MountState::Tracking);
     u.tick(600);  // past the row 0 click ignore
@@ -1654,21 +1663,22 @@ int walk(Ui &u)
     u.state(MountState::Idle);
     u.tick(600);
     menu(u, 2);
-    for (int i = 0; i < 4 && !u.inv("AZ"); ++i)  // the axis is kept between visits
+    openOptions(u);
+    for (int i = 0; i < 4 && !u.drew("Axis: AZ") && !u.drew("Eksen: AZ"); ++i)
         u.click();
+    u.hold();  // Adjust on AZ
     u.m.azFault = true;
     u.turn(1);  // refused: DRIVER FAULT
     u.m.azFault = false;
     u.tick(2100);
-    u.hold();
+    u.hold();  // menu
     u.hold();  // status
     menu(u, 2);
     u.state(MountState::Slewing);  // STOP bar on Adjust
     u.click();
     u.state(MountState::Idle);
     u.tick(600);
-    menu(u, 2);
-    u.hold();
+    openOptions(u);
     u.state(MountState::Slewing);  // and on the options
     u.click();
     u.state(MountState::Idle);
@@ -1715,7 +1725,8 @@ TEST(UiFlowsTest, AllScreensFit)
                           "BIG JUMP - CHECK", "SYNCED", "SETUP", "SETUP DATE", "SETUP TIME", "SETUP UTC", "SETUP LAT", "SETUP LON",
                           "Clears Sync. Sure?", "SETTINGS", "MIN ALT", "PARKING", "HOMING", "> park position",
                           "Set date+time first", "REBOOTED - SET TIME", "DEC DRIVER FAULT", "turn to wake", "click: STOP", "ADJUST", "FOCUS",
-                          "Set home here?", "Stop the mount first", "click:axis hold:more", "DRIVER FAULT", "Sync on target", "NETWORK",
+                          "Set FOCUS home?", "Stop the mount first", "click:axis hold:menu", "DRIVER FAULT", "Sync on target", "NETWORK",
+                          "OPTIONS", "click: options", "Axis: AZ",
                           "Mode: No bridge", "Mode: Connecting", "Own WiFi: Off", "IP: 255.255.255.255", "Clients: 9  -127 dBm"})
         EXPECT_EQ(1u, u.c.seen.count(s)) << s;
     u.c.seen.clear();
@@ -1725,7 +1736,8 @@ TEST(UiFlowsTest, AllScreensFit)
     for (const char *s : {"HEDEF RA", "HEDEF DEC", "TIKLA = GIT", "TIKLA = ESITLE", "UFKUN ALTINDA", "GUNESE COK YAKIN", "GECERSIZ",
                           "BUYUK FARK-KONTROL", "ESITLENDI", "KURULUM BOYLAM", "Esitleme silinsin?", "AYARLAR", "MIN YUKS",
                           "PARK EDIYOR", "EVE GIDIYOR", "Once tarih/saat gir", "cevir: uyan", "tikla: DURDUR", "AYAR", "ODAK",
-                          "Evi buraya ayarla?", "Once durdur", "tikla:eksen tut:ek", "SURUCU HATASI", "Hedefe esitle", "AG",
+                          "ODAK evini ayarla?", "Once durdur", "tikla:eksen tut:menu", "SURUCU HATASI", "Hedefe esitle", "AG",
+                          "SECENEKLER", "tikla: secenekler", "Eksen: AZ",
                           "Mod: Kopru yok", "Mod: Baglaniyor", "Kendi WiFi: Otomatik", "Istemci: 9  -127 dBm"})
         EXPECT_EQ(1u, u.c.seen.count(s)) << s;
 
@@ -1811,18 +1823,22 @@ void adjust(Ui &u)
     menu(u, 2);
 }
 
-// Adjust options list with the cursor on `row`.
+// Adjust options list with the cursor on `row` (0 Axis, 1 Step, 2 Sync on target, 3 Set <AXIS> home, 4 Set home all, 5 Go home).
 void options(Ui &u, int row)
 {
-    u.hold();
+    openOptions(u);
     if (row)
         u.turn(static_cast<int8_t>(row));
 }
 
-// Set the current axis's step size by index 0..4 into its list (default 2), back on Adjust.
-void setStep(Ui &u, int idx)
+// Set a step size by index 0..4 into the axis's list (default 2), back on Adjust on that axis. `axisRow`: the Axis row text to
+// select first ("Axis: AZ"); without it the axis last moved.
+void setStep(Ui &u, int idx, const char *axisRow = nullptr)
 {
-    u.hold();  // options, cursor on Step
+    openOptions(u);
+    for (int i = 0; axisRow && i < 6 && !u.drew(axisRow); ++i)
+        u.click();
+    u.turn(1);  // Step
     clicks(u, (idx - 2 + 5) % 5);
     u.hold();  // back to Adjust
 }
@@ -1903,11 +1919,13 @@ TEST(UiFlowsTest, AdjustClickCyclesAxes)
     u.tick();
     adjust(u);
     EXPECT_TRUE(u.inv("RA"));
-    for (const char *ax : {"DEC", "AZ", "FOCUS", "RA"})
+    for (const char *ax : {"DEC", "AZ", "FOCUS"})
     {
         u.click();
         EXPECT_TRUE(u.inv(ax)) << ax;
     }
+    u.click();  // after the last fitted axis: the Options stop
+    EXPECT_TRUE(u.drew("OPTIONS"));
     Ui v;
     v.tick();
     adjust(v);
@@ -1915,7 +1933,7 @@ TEST(UiFlowsTest, AdjustClickCyclesAxes)
     EXPECT_TRUE(v.inv("DEC"));
     EXPECT_FALSE(v.drew("AZ"));
     v.click();
-    EXPECT_TRUE(v.inv("RA"));
+    EXPECT_TRUE(v.drew("OPTIONS"));
 }
 
 // The step lists per axis id (0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT).
@@ -1949,7 +1967,8 @@ TEST(UiFlowsTest, AdjustStepListsPerAxisDefaultMiddle)
         EXPECT_EQ(kLists[ax][2], oneDetent(u, ax)) << ax;  // every axis starts at the middle entry
         for (int k = 3; k < 8; ++k)  // click on the step option cycles 0..4 for this axis only, wrapping
         {
-            u.hold();
+            openOptions(u);  // on the axis just moved
+            u.turn(1);
             u.click();
             u.hold();
             EXPECT_EQ(kLists[ax][k % 5], oneDetent(u, ax)) << ax << " " << k;
@@ -1968,12 +1987,14 @@ TEST(UiFlowsTest, AdjustStepSizeIsKeptPerAxis)
     u.click();  // DEC still 1000
     EXPECT_EQ(1000, oneDetent(u, 1));
     u.click();  // AZ
-    setStep(u, 0);  // 100
-    u.click();  // back to RA (ALT and Focus are not fitted)
+    setStep(u, 0, "Axis: AZ");  // 100
+    EXPECT_EQ(100, oneDetent(u, 2));
+    openOptions(u);  // RA again through the Axis row: still 50000
+    while (!u.drew("Axis: RA"))
+        u.click();
+    u.hold();
     EXPECT_EQ(50000, oneDetent(u, 0));
-    u.hold();  // leave Adjust (options, Main menu row, status) and come back: still kept
-    u.turn(4);
-    u.click();
+    u.hold();  // leave Adjust (main menu, status) and come back: still kept
     u.hold();
     menu(u, 2);
     EXPECT_EQ(50000, oneDetent(u, 0));
@@ -1990,7 +2011,7 @@ TEST(UiFlowsTest, AdjustLargestMoveFitsInt32)
     adjust(u);
     u.click();
     u.click();  // AZ
-    setStep(u, 4);  // 300000
+    setStep(u, 4, "Axis: AZ");  // 300000
     u.actions();
     u.t += 10;
     u.ui.onTurn(127, u.t);
@@ -2002,51 +2023,25 @@ TEST(UiFlowsTest, AdjustLargestMoveFitsInt32)
     EXPECT_EQ(2, a.b);
 }
 
-TEST(UiFlowsTest, AdjustLongPressOpensOptions)
+TEST(UiFlowsTest, AdjustOptionsStopOpensTheOptionsList)
 {
     Ui u;
     u.tick();
     adjust(u);
-    u.hold();
+    u.hold();  // a long press is the main menu
+    EXPECT_TRUE(u.drew("MENU"));
+    u.turn(2);
+    u.click();  // Adjust again
+    openOptions(u);
+    EXPECT_TRUE(starts(u, "Axis:"));
     EXPECT_TRUE(starts(u, "Step"));
     EXPECT_TRUE(u.drew("Sync on target"));
-    EXPECT_TRUE(u.drew("Set home here"));
+    EXPECT_TRUE(u.drew("Set RA home"));
     EXPECT_TRUE(u.drew("Set home all"));
-    u.turn(5);
-    EXPECT_TRUE(u.inv("Main menu"));
-    u.turn(1);
-    EXPECT_TRUE(u.inv("Back"));  // Main menu is the row before it
-    EXPECT_TRUE(u.drew("Go home"));
     u.hold();  // long press returns to Adjust, not the main menu
     EXPECT_TRUE(u.drew("ADJUST"));
     EXPECT_FALSE(u.drew("MENU"));
     EXPECT_EQ(0, u.c.violations);
-}
-
-TEST(UiFlowsTest, AdjustOptionsMainMenuRow)
-{
-    for (MountState s : {MountState::Tracking, MountState::Idle})  // never locked
-    {
-        Ui u;
-        u.tick();
-        adjust(u);
-        u.state(s);
-        u.tick(600);  // past the M2 click ignore after row 0 changed
-        options(u, 5);
-        EXPECT_TRUE(u.inv("Main menu"));
-        u.actions();
-        u.click();
-        EXPECT_FALSE(Ui::has(u.actions(), Kind::BeepError));
-        EXPECT_TRUE(u.drew("MENU"));
-        EXPECT_EQ(0, u.c.violations);
-    }
-    Ui t;  // Turkish
-    t.tick();
-    toggleLang(t);
-    adjust(t);
-    t.hold();
-    t.turn(5);
-    EXPECT_TRUE(t.inv("Ana menu"));
 }
 
 TEST(UiFlowsTest, AdjustStopStaysOnAdjust)
@@ -2072,7 +2067,7 @@ TEST(UiFlowsTest, AdjustStopStaysOnAdjust)
             EXPECT_TRUE(u.inv("DEC"));
             u.state(MountState::Idle);
             u.click();  // the next click is an axis click, not swallowed by the M2 ignore window
-            EXPECT_TRUE(u.inv("RA"));
+            EXPECT_TRUE(u.drew("OPTIONS"));
             u.tick(2100);
             EXPECT_FALSE(u.drew("STOPPED"));
             EXPECT_TRUE(u.drew("ADJUST"));
@@ -2100,8 +2095,7 @@ TEST(UiFlowsTest, AdjustOtherTransientsKeepTheAdjustHeader)
     Ui u;
     u.tick();
     adjust(u);
-    u.hold();
-    u.turn(1);
+    options(u, 2);
     u.click();  // Sync on target: SYNCED goes to Status
     EXPECT_TRUE(u.drew("SYNCED"));
     u.click();  // menu
@@ -2116,7 +2110,7 @@ TEST(UiFlowsTest, StopFromOtherScreensGoesToStatus)
     Ui u;
     u.tick();
     adjust(u);
-    u.hold();  // options
+    openOptions(u);
     u.state(MountState::Slewing);
     u.click();
     EXPECT_TRUE(u.drew("STOPPED"));
@@ -2140,7 +2134,7 @@ TEST(UiFlowsTest, AdjustLongPressWhileMovingIsStop)
         Ui w;  // the options list too
         w.tick();
         adjust(w);
-        w.hold();
+        openOptions(w);
         w.state(s);
         w.actions();
         w.click();
@@ -2184,15 +2178,15 @@ TEST(UiFlowsTest, AdjustCyclesAltInDisplayOrder)
     struct Case
     {
         bool az, alt, focus;
-        std::vector<const char *> order;  // after RA, one click each
+        std::vector<const char *> order;  // after RA, one click each; the Options stop ends it
     };
     const Case cases[] = {
-        {true, true, true, {"DEC", "AZ", "ALT", "FOCUS", "RA"}},
-        {false, true, true, {"DEC", "ALT", "FOCUS", "RA"}},
-        {true, true, false, {"DEC", "AZ", "ALT", "RA"}},
-        {false, true, false, {"DEC", "ALT", "RA"}},
-        {true, false, true, {"DEC", "AZ", "FOCUS", "RA"}},
-        {false, false, false, {"DEC", "RA"}},
+        {true, true, true, {"DEC", "AZ", "ALT", "FOCUS", "OPTIONS"}},
+        {false, true, true, {"DEC", "ALT", "FOCUS", "OPTIONS"}},
+        {true, true, false, {"DEC", "AZ", "ALT", "OPTIONS"}},
+        {false, true, false, {"DEC", "ALT", "OPTIONS"}},
+        {true, false, true, {"DEC", "AZ", "FOCUS", "OPTIONS"}},
+        {false, false, false, {"DEC", "OPTIONS"}},
     };
     for (const Case &k : cases)
     {
@@ -2207,7 +2201,7 @@ TEST(UiFlowsTest, AdjustCyclesAltInDisplayOrder)
         for (const char *ax : k.order)
         {
             u.click();
-            EXPECT_TRUE(u.inv(ax)) << ax;
+            EXPECT_TRUE(std::string(ax) == "OPTIONS" ? u.drew(ax) : u.inv(ax)) << ax;
         }
         EXPECT_EQ(0, u.c.violations);  // five axes fit the strip
     }
@@ -2229,7 +2223,8 @@ TEST(UiFlowsTest, AdjustAltMovesAxis4AndItsFaultLocksOnlyAlt)
     EXPECT_FALSE(Ui::has(refused, Kind::MoveSteps));
     EXPECT_TRUE(u.drew("ALT DRIVER FAULT"));
     u.tick(2100);
-    u.click();  // ALT -> RA: still moves
+    openOptions(u);  // the Axis row starts on RA (nothing moved yet)
+    u.hold();
     u.actions();
     u.turn(1);
     bool f;
@@ -2277,7 +2272,7 @@ TEST(UiFlowsTest, SyncOnTargetNeedsTargetAndClock)
     u.m.hasTarget = false;
     u.tick();
     adjust(u);
-    options(u, 1);
+    options(u, 2);
     u.actions();
     u.click();
     const auto na = u.actions();
@@ -2292,7 +2287,7 @@ TEST(UiFlowsTest, SyncOnTargetNeedsTargetAndClock)
     v.hold();  // menu
     v.turn(2);
     v.click();
-    options(v, 1);
+    options(v, 2);
     v.actions();
     v.click();
     const auto a = v.actions();
@@ -2307,7 +2302,7 @@ TEST(UiFlowsTest, SyncOnTargetNeedsTargetAndClock)
     w.m.hasTarget = false;  // the adapter reports it only while slewing: the UI keeps it
     w.tick(10);
     adjust(w);
-    options(w, 1);
+    options(w, 2);
     w.actions();
     w.click();
     bool f;
@@ -2322,35 +2317,37 @@ TEST(UiFlowsTest, SetHomeNeedsIdle)
     Ui u;  // tracking: locked
     u.tick();
     adjust(u);
-    options(u, 2);
+    options(u, 3);
     u.actions();
     u.click();
     EXPECT_TRUE(Ui::has(u.actions(), Kind::BeepError));
     EXPECT_TRUE(u.drew("Stop the mount first"));
-    EXPECT_FALSE(u.drew("Set home here?"));
+    EXPECT_FALSE(u.drew("Set RA home?"));
 
-    Ui v;  // idle: confirm, then SetHome
+    Ui v;  // idle: confirm, then SetHome (axis 0, RA)
     v.m.state = MountState::Idle;
     v.tick();
     adjust(v);
-    options(v, 2);
+    options(v, 3);
     v.click();
-    EXPECT_TRUE(v.drew("Set home here?"));
+    EXPECT_TRUE(v.drew("Set RA home?"));
     v.actions();
     v.click();
     bool f;
-    get(v, Kind::SetHome, f);
+    const UiAction a = get(v, Kind::SetHome, f);
     EXPECT_TRUE(f);
+    EXPECT_EQ(0, a.b);
     EXPECT_TRUE(v.drew("HOME SET"));
+    EXPECT_FALSE(v.drew("ADJUST"));  // the header shows HOME SET
 
     Ui w;  // the confirm's long press goes back to the options
     w.m.state = MountState::Idle;
     w.tick();
     adjust(w);
-    options(w, 2);
+    options(w, 3);
     w.click();
     w.hold();
-    EXPECT_TRUE(w.drew("Go home"));
+    EXPECT_TRUE(w.inv("Set RA home"));
     EXPECT_EQ(0, v.c.violations + w.c.violations);
 }
 
@@ -2361,7 +2358,7 @@ TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
     t.tick();
     toggleLang(t);
     adjust(t);
-    options(t, 3);
+    options(t, 4);
     EXPECT_TRUE(t.inv("Tumunu eve ayarla"));
     t.click();
     EXPECT_TRUE(t.drew("Tumunu eve ayarla?"));
@@ -2369,7 +2366,7 @@ TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
     Ui u;  // tracking: locked
     u.tick();
     adjust(u);
-    options(u, 3);
+    options(u, 4);
     EXPECT_TRUE(u.inv("Set home all"));
     u.actions();
     u.click();
@@ -2381,7 +2378,7 @@ TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
     v.m.state = MountState::Idle;
     v.tick();
     adjust(v);
-    options(v, 3);
+    options(v, 4);
     v.click();
     EXPECT_TRUE(v.drew("Set home all?"));
     v.actions();
@@ -2390,13 +2387,13 @@ TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
     EXPECT_TRUE(Ui::has(a, Kind::SetHomeAll));
     EXPECT_FALSE(Ui::has(a, Kind::SetHome));
     EXPECT_TRUE(v.drew("HOME SET"));
-    EXPECT_FALSE(v.drew("Set home all?"));  // on Status
+    EXPECT_FALSE(v.drew("Set home all?"));  // back on Adjust
 
     Ui w;  // the confirm's long press goes back to the options
     w.m.state = MountState::Idle;
     w.tick();
     adjust(w);
-    options(w, 3);
+    options(w, 4);
     w.click();
     w.actions();
     w.hold();
@@ -2407,7 +2404,7 @@ TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
     x.m.state = MountState::Idle;
     x.tick();
     adjust(x);
-    options(x, 3);
+    options(x, 4);
     x.click();
     x.state(MountState::Tracking);
     x.actions();
@@ -2419,18 +2416,18 @@ TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
     EXPECT_EQ(0, t.c.violations + u.c.violations + v.c.violations + w.c.violations + x.c.violations);
 }
 
-TEST(UiFlowsTest, SetHomeHereConfirmStillSetsHomeHere)
+TEST(UiFlowsTest, SetHomeAxisConfirmStillSetsTheAxis)
 {
-    Ui u;  // opened after a Set home all was cancelled: still the "here" question
+    Ui u;  // opened after a Set home all was cancelled: still the axis question
     u.m.state = MountState::Idle;
     u.tick();
     adjust(u);
-    options(u, 3);
+    options(u, 4);
     u.click();
     u.hold();
     u.turn(-1);
     u.click();
-    EXPECT_TRUE(u.drew("Set home here?"));
+    EXPECT_TRUE(u.drew("Set RA home?"));
     u.actions();
     u.click();
     const auto a = u.actions();
@@ -2446,7 +2443,7 @@ TEST(UiFlowsTest, GoHomeAllowedFromTracking)
         u.m.state = s;
         u.tick();
         adjust(u);
-        options(u, 4);
+        options(u, 5);
         u.actions();
         u.click();
         EXPECT_TRUE(Ui::has(u.actions(), Kind::GoHome));
@@ -2468,7 +2465,7 @@ TEST(UiFlowsTest, AdjustWorksWithoutDateTime)
     u.turn(1);
     EXPECT_TRUE(Ui::has(u.actions(), Kind::MoveSteps));
     u.tick(400);  // the step move latch has expired
-    options(u, 2);
+    options(u, 3);
     u.click();
     u.click();
     EXPECT_TRUE(Ui::has(u.actions(), Kind::SetHome));
@@ -2651,4 +2648,357 @@ TEST(UiFlowsTest, StaleBridgeStatusStaysExpired)
     n.atMs = 2000;
     core::expireNet(n, 1500);  // atMs slightly ahead of now (stamped after the tick began)
     EXPECT_TRUE(n.seen);
+}
+
+// ---------------- Adjust: Options stop, Axis row, per-axis home ----------------
+
+namespace {
+
+struct AxisCase
+{
+    int id;
+    const char *name;
+    const char *trName;
+    const char *home;
+    const char *homeQ;
+    const char *homeTr;
+    const char *homeQTr;
+};
+
+const AxisCase kAxisCases[] = {{0, "RA", "RA", "Set RA home", "Set RA home?", "RA evini ayarla", "RA evini ayarla?"},
+                               {1, "DEC", "DEC", "Set DEC home", "Set DEC home?", "DEC evini ayarla", "DEC evini ayarla?"},
+                               {2, "AZ", "AZ", "Set AZ home", "Set AZ home?", "AZ evini ayarla", "AZ evini ayarla?"},
+                               {4, "ALT", "ALT", "Set ALT home", "Set ALT home?", "ALT evini ayarla", "ALT evini ayarla?"},
+                               {3, "FOCUS", "ODAK", "Set FOCUS home", "Set FOCUS home?", "ODAK evini ayarla", "ODAK evini ayarla?"}};
+
+// An idle UI with every axis fitted.
+void idleAllAxes(Ui &u)
+{
+    u.m.hasAz = u.m.hasAlt = u.m.hasFocus = true;
+    u.m.state = MountState::Idle;
+    u.tick();
+}
+
+}  // namespace
+
+TEST(UiFlowsTest, AdjustLongPressOpensMainMenuOnEveryStop)
+{
+    for (int stop = 0; stop < 4; ++stop)  // RA, DEC, AZ, the Options stop
+    {
+        Ui u;
+        u.m.hasAz = true;
+        u.tick();
+        adjust(u);
+        clicks(u, stop);
+        EXPECT_EQ(stop == 3, u.drew("OPTIONS")) << stop;
+        u.hold();
+        EXPECT_TRUE(u.drew("MENU")) << stop;
+        EXPECT_TRUE(u.inv("Stop tracking")) << stop;  // opens at row 0
+        EXPECT_FALSE(u.drew("Sync on target")) << stop;
+    }
+}
+
+TEST(UiFlowsTest, AdjustClickCyclesFittedAxesThenTheOptionsStop)
+{
+    struct Case
+    {
+        bool az, alt, focus;
+        std::vector<const char *> order;  // after RA, one click each; the last is the stop
+    };
+    const Case cases[] = {{true, true, true, {"DEC", "AZ", "ALT", "FOCUS", "OPTIONS"}},
+                          {false, false, true, {"DEC", "FOCUS", "OPTIONS"}},
+                          {true, false, false, {"DEC", "AZ", "OPTIONS"}},
+                          {false, false, false, {"DEC", "OPTIONS"}}};
+    for (const Case &k : cases)
+    {
+        Ui u;
+        u.m.hasAz = k.az;
+        u.m.hasAlt = k.alt;
+        u.m.hasFocus = k.focus;
+        u.tick();
+        adjust(u);
+        for (const char *s : k.order)
+        {
+            u.click();
+            if (std::string(s) == "OPTIONS")
+            {
+                EXPECT_TRUE(u.drew("OPTIONS"));
+                EXPECT_TRUE(u.drew("ADJUST"));
+                EXPECT_TRUE(u.drew("click: options"));
+                EXPECT_FALSE(contains(u, "Pos"));
+            }
+            else
+                EXPECT_TRUE(u.inv(s)) << s;
+        }
+        u.click();  // the stop opens the options
+        EXPECT_TRUE(u.drew("Axis: RA"));
+        EXPECT_EQ(0, u.c.violations);
+    }
+    Ui t;  // Turkish
+    t.tick();
+    toggleLang(t);
+    adjust(t);
+    clicks(t, 2);
+    EXPECT_TRUE(t.drew("SECENEKLER"));
+    EXPECT_TRUE(t.drew("tikla: secenekler"));
+    EXPECT_EQ(0, t.c.violations);
+}
+
+TEST(UiFlowsTest, OptionsStopTurnDoesNothing)
+{
+    Ui u;
+    u.tick();
+    adjust(u);
+    clicks(u, 2);
+    ASSERT_TRUE(u.drew("OPTIONS"));
+    u.actions();
+    u.turn(1);
+    u.turn(-3);
+    EXPECT_TRUE(u.actions().empty());  // no move, no beep
+    EXPECT_TRUE(u.drew("OPTIONS"));
+}
+
+TEST(UiFlowsTest, OptionsRowsAndNoMainMenuRow)
+{
+    Ui u;
+    idleAllAxes(u);
+    adjust(u);
+    openOptions(u);
+    EXPECT_TRUE(u.inv("Axis: RA"));
+    const char *rows[] = {"Step", "Sync on target", "Set RA home", "Set home all", "Go home", "Back"};
+    for (const char *r : rows)
+    {
+        u.turn(1);
+        EXPECT_TRUE(contains(u, r)) << r;
+    }
+    EXPECT_TRUE(u.inv("Back"));
+    EXPECT_FALSE(u.drew("Main menu"));
+    u.turn(5);
+    EXPECT_TRUE(u.inv("Back"));  // clamped: Back is the last row
+    Ui t;
+    t.tick();
+    toggleLang(t);
+    adjust(t);
+    openOptions(t);
+    EXPECT_TRUE(t.inv("Eksen: RA"));
+    t.turn(9);
+    EXPECT_TRUE(t.inv("Geri"));
+    EXPECT_FALSE(t.drew("Ana menu"));
+}
+
+TEST(UiFlowsTest, AxisRowStartsOnLastMovedAxisAndCyclesFittedAxes)
+{
+    Ui u;  // nothing moved since boot: RA, whatever page the options were opened from
+    u.m.hasAz = true;
+    u.tick();
+    adjust(u);
+    u.click();  // DEC page
+    openOptions(u);
+    EXPECT_TRUE(u.drew("Axis: RA"));
+    u.click();
+    EXPECT_TRUE(u.drew("Axis: DEC"));
+    u.click();
+    EXPECT_TRUE(u.drew("Axis: AZ"));
+    u.click();  // wraps over the fitted axes only: no ALT, FOCUS or Options
+    EXPECT_TRUE(u.drew("Axis: RA"));
+
+    Ui w;  // the axis last moved by a turn, not the page the options open from
+    w.m.hasAz = true;
+    w.tick();
+    adjust(w);
+    w.click();
+    w.turn(1);  // DEC moved
+    w.tick(400);
+    w.click();  // AZ page, nothing moved there
+    openOptions(w);
+    EXPECT_TRUE(w.drew("Axis: DEC"));
+}
+
+TEST(UiFlowsTest, StepSizeAndHomeRowFollowTheAxisRow)
+{
+    for (const AxisCase &k : kAxisCases)
+        for (int lang = 0; lang < 2; ++lang)
+        {
+            Ui u;
+            idleAllAxes(u);
+            if (lang)
+                toggleLang(u);
+            adjust(u);
+            openOptions(u);
+            const std::string axisRow = std::string(lang ? "Eksen: " : "Axis: ") + (lang ? k.trName : k.name);
+            for (int i = 0; i < 6 && !u.drew(axisRow.c_str()); ++i)
+                u.click();
+            ASSERT_TRUE(u.drew(axisRow.c_str())) << k.name;
+            u.turn(3);
+            EXPECT_TRUE(u.inv(lang ? k.homeTr : k.home)) << k.name;
+            EXPECT_EQ(0, u.c.violations) << k.name;
+            u.click();  // confirm
+            EXPECT_TRUE(u.drew(lang ? k.homeQTr : k.homeQ)) << k.name;
+            EXPECT_EQ(0, u.c.violations) << k.name;
+            u.actions();
+            u.click();
+            bool f;
+            const UiAction a = get(u, Kind::SetHome, f);
+            ASSERT_TRUE(f) << k.name;
+            EXPECT_EQ(k.id, a.b) << k.name;
+            EXPECT_TRUE(u.drew(lang ? "EV AYARLANDI" : "HOME SET")) << k.name;
+            EXPECT_TRUE(contains(u, lang ? "Konum" : "Pos")) << k.name;  // on the Adjust page...
+            EXPECT_TRUE(u.inv(lang ? k.trName : k.name)) << k.name;  // ...on the Axis row's axis
+            u.tick(2100);
+            EXPECT_TRUE(u.drew(lang ? "AYAR" : "ADJUST")) << k.name;
+            EXPECT_FALSE(u.drew(lang ? "EV AYARLANDI" : "HOME SET")) << k.name;
+        }
+    Ui u;  // the step size follows the Axis row: AZ gets its own list
+    u.m.hasAz = true;
+    u.tick();
+    adjust(u);
+    openOptions(u);
+    clicks(u, 2);  // Axis: AZ
+    u.turn(1);
+    u.click();  // AZ step: index 3 of its list
+    u.hold();  // Adjust on AZ
+    EXPECT_TRUE(u.inv("AZ"));
+    EXPECT_EQ(kLists[2][3], oneDetent(u, 2));
+}
+
+TEST(UiFlowsTest, HomeAllConfirmReturnsToAdjust)
+{
+    Ui u;
+    idleAllAxes(u);
+    adjust(u);
+    openOptions(u);
+    u.click();  // Axis: DEC
+    u.turn(4);
+    EXPECT_TRUE(u.inv("Set home all"));
+    u.click();
+    EXPECT_TRUE(u.drew("Set home all?"));
+    u.actions();
+    u.click();
+    const auto a = u.actions();
+    EXPECT_TRUE(Ui::has(a, Kind::SetHomeAll));
+    EXPECT_FALSE(Ui::has(a, Kind::SetHome));
+    EXPECT_TRUE(u.drew("HOME SET"));
+    EXPECT_TRUE(contains(u, "Pos"));
+    EXPECT_TRUE(u.inv("DEC"));
+    EXPECT_EQ(0, u.c.violations);
+    Ui t;
+    idleAllAxes(t);
+    toggleLang(t);
+    adjust(t);
+    openOptions(t);
+    t.turn(4);
+    t.click();
+    EXPECT_TRUE(t.drew("Tumunu eve ayarla?"));
+}
+
+TEST(UiFlowsTest, HomeRowsLockedUnlessIdleAndRecheckedAtTheClick)
+{
+    for (int row : {3, 4})
+    {
+        Ui u;  // tracking: locked
+        u.tick();
+        adjust(u);
+        openOptions(u);
+        u.turn(static_cast<int8_t>(row));
+        u.actions();
+        u.click();
+        EXPECT_TRUE(Ui::has(u.actions(), Kind::BeepError)) << row;
+        EXPECT_TRUE(u.drew("Stop the mount first")) << row;
+
+        Ui x;  // idle at the row, tracking at the confirm's click: back to the options
+        x.m.state = MountState::Idle;
+        x.tick();
+        adjust(x);
+        openOptions(x);
+        x.turn(static_cast<int8_t>(row));
+        x.click();
+        x.state(MountState::Tracking);
+        x.actions();
+        x.click(600);
+        const auto b = x.actions();
+        EXPECT_TRUE(Ui::has(b, Kind::BeepError)) << row;
+        EXPECT_FALSE(Ui::has(b, Kind::SetHome) || Ui::has(b, Kind::SetHomeAll)) << row;
+        EXPECT_TRUE(contains(x, "Axis: RA")) << row;  // the options list
+        EXPECT_FALSE(contains(x, "Pos")) << row;
+    }
+}
+
+TEST(UiFlowsTest, LeavingOptionsLandsOnTheAxisRowsAxis)
+{
+    for (int how = 0; how < 3; ++how)  // long press, Back row, home confirm
+    {
+        Ui u;
+        idleAllAxes(u);
+        adjust(u);
+        openOptions(u);
+        clicks(u, 2);  // Axis: AZ
+        if (how == 0)
+            u.hold();
+        else if (how == 1)
+        {
+            u.turn(9);
+            u.click();
+        }
+        else
+        {
+            u.turn(3);
+            u.click();
+            u.click();
+        }
+        EXPECT_TRUE(u.inv("AZ")) << how;
+        EXPECT_TRUE(contains(u, "Pos")) << how;
+        EXPECT_FALSE(u.drew("OPTIONS")) << how;
+        u.actions();
+        u.tick(400);
+        u.turn(1);  // the next turn moves AZ
+        bool f;
+        const UiAction a = get(u, Kind::MoveSteps, f);
+        ASSERT_TRUE(f) << how;
+        EXPECT_EQ(2, a.b) << how;
+    }
+    for (int row : {2, 5})  // Sync on target and Go home still go to Status
+    {
+        Ui u;
+        idleAllAxes(u);
+        adjust(u);
+        openOptions(u);
+        u.turn(static_cast<int8_t>(row));
+        u.click();
+        EXPECT_FALSE(contains(u, "Pos")) << row;
+        EXPECT_TRUE(contains(u, "LST")) << row;  // Status
+    }
+    Ui v;  // a long press on the confirm returns to the options
+    idleAllAxes(v);
+    adjust(v);
+    openOptions(v);
+    v.turn(3);
+    v.click();
+    v.hold();
+    EXPECT_TRUE(v.inv("Set RA home"));
+}
+
+TEST(UiFlowsTest, OptionsStopHidesTheHomeSetTransient)
+{
+    for (int lang = 0; lang < 2; ++lang)
+    {
+        Ui u;
+        u.m.hasFocus = true;
+        u.m.state = MountState::Idle;
+        u.tick();
+        if (lang)
+            toggleLang(u);
+        adjust(u);
+        openOptions(u);
+        for (int i = 0; i < 4 && !u.drew(lang ? "Eksen: ODAK" : "Axis: FOCUS"); ++i)
+            u.click();
+        u.turn(3);
+        u.click();  // confirm
+        u.click();  // HOME SET on the Adjust page of the last fitted axis
+        EXPECT_TRUE(u.drew(lang ? "EV AYARLANDI" : "HOME SET"));
+        u.click();  // the Options stop, still within the transient
+        EXPECT_TRUE(u.drew(lang ? "SECENEKLER" : "OPTIONS"));
+        EXPECT_TRUE(u.drew(lang ? "AYAR" : "ADJUST"));
+        EXPECT_FALSE(u.drew(lang ? "EV AYARLANDI" : "HOME SET"));
+        EXPECT_EQ(0, u.c.violations);
+    }
 }

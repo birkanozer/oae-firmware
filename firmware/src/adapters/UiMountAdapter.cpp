@@ -190,9 +190,10 @@ void UiMountAdapter::apply(const core::UiAction &a)
             _mount.suppressTrackingOnArrival();  // after a UI home the mount is idle, not tracking (startSlewingToHome clears the flag)
             _goingHome = true;
             break;
-        case Kind::SetHome:  // the UI offers it only when idle: setHome() waits for the axes
-            _mount.setHomeHere();
-            _synced = false;
+        case Kind::SetHome:  // b = axis; the UI offers it only when idle: the Mount waits for the axis
+            _mount.setHomeAxis(a.b);
+            if (a.b < 2)  // RA or DEC: the sky reference changed
+                _synced = false;
             break;
         case Kind::SetHomeAll:  // as SetHome, plus the AZ, ALT and Focus counters
             _mount.setHomeAll();

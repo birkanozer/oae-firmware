@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.2] - 2026-11-28
+
+### Changed
+
+- Adjust page: long press goes to the main menu. Clicking through the axes ends on an **Options** stop; click there opens the options, which start with an **Axis** row (preset to the axis last moved) that Step size and the home row act on. The Main menu row is gone.
+- **Set <axis> home** (was Set home here) sets only the chosen axis: RA zeroes RA and its sky reference, DEC zeroes DEC, AZ and ALT are zeroed and stored, Focus is zeroed. Set home all still sets every axis.
+- Both home confirms return to the Adjust page on the chosen axis, with HOME SET in the header.
+
 ## [v0.7.1] - 2026-11-28
 
 ### Changed
