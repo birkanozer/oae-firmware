@@ -367,6 +367,7 @@ class Mount
     // Set home at the current position (UI and LX200). Works without date and time: the sky reference of home
     // is then taken by applyPendingHomeReference() once both are set. Drops any Sync offset. Moves nothing.
     bool setHomeHere();
+    bool setHomeAll();
     void applyPendingHomeReference();
     bool azDriverFailed() const;
     bool altDriverFailed() const;

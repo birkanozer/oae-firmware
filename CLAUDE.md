@@ -79,3 +79,4 @@ Feature work follows the global **`feature-workflow`** skill. Keys it reads:
   stays as a fallback.
 - 2026-11-27 The camera module has its own Mini-360 buck (5.1 V), fed with 15 V (fused PD-trigger output)
   over the cable's VBUS; the Robin no longer powers it. Focus stays a stock 5 V 28BYJ-48 on the ULN2003.
+- 2026-11-28 The LCD's Adjust page moves only by step sizes, one list per axis; continuous jog stays on the phone (LX200).

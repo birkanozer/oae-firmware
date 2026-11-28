@@ -16,8 +16,12 @@ using namespace draw;
 namespace {
 
 constexpr float kBigJumpDeg = 5.0f;  // M5
-constexpr int32_t kStepSizes[5] = {1, 10, 100, 1000, 10000};
-constexpr uint8_t kJogFirst = 5;  // _stepSel 5..8 = JOG SLOW, CENTER, FIND, MAX (slew rates 1..4)
+// Adjust step sizes in steps, per axis id (0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT); at most 127 detents * 300000 fits int32_t.
+constexpr int32_t kStepSizes[5][5] = {{10, 100, 1000, 10000, 50000},
+                                      {10, 100, 1000, 10000, 50000},
+                                      {100, 1000, 10000, 60000, 300000},
+                                      {1, 10, 100, 1000, 10000},
+                                      {100, 1000, 10000, 60000, 300000}};
 
 int32_t wrapHalfDay(int32_t s)  // seconds -> (-43200, 43200]
 {
@@ -270,7 +274,9 @@ uint8_t UiController::items(Item *out) const
             add(t(TextId::StepRow), v, false);
             add(t(TextId::SyncOnTarget), nullptr, optionLock(1) != TextId::Count);
             add(t(TextId::SetHomeHere), nullptr, optionLock(2) != TextId::Count);
-            add(t(TextId::GoHome), nullptr, optionLock(3) != TextId::Count);
+            add(t(TextId::SetHomeAll), nullptr, optionLock(3) != TextId::Count);
+            add(t(TextId::GoHome), nullptr, optionLock(4) != TextId::Count);
+            add(t(TextId::MainMenu), nullptr, false);
             break;
         default:
             break;
@@ -331,7 +337,8 @@ void UiController::clickList(uint32_t nowMs)
     }
 }
 
-// Adjust options: 0 Step size, 1 Sync on target, 2 Set home here, 3 Go home. The locks match the rows' dots.
+// Adjust options: 0 Step size, 1 Sync on target, 2 Set home here, 3 Set home all, 4 Go home, 5 Main menu (never locked).
+// The locks match the rows' dots.
 TextId UiController::optionLock(uint8_t row) const
 {
     switch (row)
@@ -339,8 +346,9 @@ TextId UiController::optionLock(uint8_t row) const
         case 1:  // the last Point target, and the clock for the sky reference
             return !dateTimeSet() ? TextId::MsgDateTimeFirst : (_haveTarget ? TextId::Count : TextId::MsgNoTarget);
         case 2:  // the markers: only while nothing moves or tracks
+        case 3:
             return _m.state == MountState::Idle ? TextId::Count : TextId::MsgStopFirst;
-        case 3:  // from idle or tracking, no clock needed
+        case 4:  // from idle or tracking, no clock needed
             return faultActive() ? faultText() : TextId::Count;
         default:
             return TextId::Count;
@@ -351,8 +359,8 @@ void UiController::clickAdjustOptions(uint8_t r)
 {
     switch (r)
     {
-        case 0:  // next size; JOG sizes only for RA and DEC
-            _stepSel = static_cast<uint8_t>((_stepSel + 1) % (_axis >= 2 ? kJogFirst : 9));
+        case 0:  // next size of the current axis
+            _stepSel[_axis] = static_cast<uint8_t>((_stepSel[_axis] + 1) % 5);
             break;
         case 1:
             push(UiAction::Kind::Sync, _tgtRa, _tgtDec);
@@ -360,41 +368,31 @@ void UiController::clickAdjustOptions(uint8_t r)
             _screen = Screen::Status;
             break;
         case 2:
+        case 3:
+            _homeAll = r == 3;
             _screen = Screen::SetHomeConfirm;
             break;
-        default:
+        case 4:
             push(UiAction::Kind::GoHome);
             _screen = Screen::Status;
+            break;
+        default:
+            openMenu();
             break;
     }
 }
 
-// Turn on Adjust: one step size per detent (detents of one tick merge into one move), or a jog.
+// Turn on Adjust: one step size per detent (detents of one tick merge into one move).
 // Never moves an axis whose driver failed.
 void UiController::turnAdjust(int8_t detents, uint32_t nowMs)
 {
-    if (_stepSel >= kJogFirst)  // RA / DEC only (the click and the options keep AZ and Focus below)
-    {
-        if (!within(_now, nowMs, kJogStopMs))  // spun while the UI was blocked: dropped (M4)
-            return;
-        const uint8_t dir = _axis == 1 ? (detents > 0 ? 1 : 4) : (detents > 0 ? 2 : 8);  // N1 E2 S4 W8, right = E / N
-        if (dir != _jogDir)
-        {
-            jogStop();
-            push(UiAction::Kind::SetSlewRate, _stepSel - kJogFirst + 1);
-            push(UiAction::Kind::JogStart, dir);
-            _jogDir = dir;
-        }
-        _jogMs = nowMs;
-        return;
-    }
     if (axisFaulted())
     {
         push(UiAction::Kind::BeepError);
         showMessage(_axis == 4 ? TextId::FaultAlt : TextId::FaultDriver, kMessageMs, nowMs);
         return;
     }
-    push(UiAction::Kind::MoveSteps, detents * kStepSizes[_stepSel], _axis);
+    push(UiAction::Kind::MoveSteps, detents * stepSize(), _axis);
     _stepLatch = true;  // a click in the same tick must STOP this move, not cycle the axis
     _stepMs = nowMs;
 }
@@ -469,19 +467,9 @@ void UiController::clickSettings(uint8_t r)
     }
 }
 
-// ---- jog stop ----
-
-void UiController::jogStop()
+int32_t UiController::stepSize() const
 {
-    if (_jogDir)
-        push(UiAction::Kind::JogStop, _jogDir);  // the adapter stops the given directions
-    _jogDir = 0;
-}
-
-TextId UiController::speedText() const
-{
-    static const TextId kRates[] = {TextId::SpeedSlow, TextId::SpeedCenter, TextId::SpeedFind, TextId::SpeedMax};
-    return kRates[_m.slewRate >= 1 && _m.slewRate <= 4 ? _m.slewRate - 1 : 0];
+    return kStepSizes[_axis][_stepSel[_axis]];
 }
 
 char UiController::letter(bool positive, bool lat) const
@@ -628,14 +616,9 @@ void UiController::renderConfirm(Canvas &c) const
         footer(c, t(TextId::FootCancel));
 }
 
-// "1000" or "JOG SLOW".
 void UiController::stepText(char *out, size_t n) const
 {
-    static const TextId kSpeeds[] = {TextId::SpeedSlow, TextId::SpeedCenter, TextId::SpeedFind, TextId::SpeedMax};
-    if (_stepSel >= kJogFirst)
-        snprintf(out, n, "%s %s", t(TextId::JogWord), t(kSpeeds[_stepSel - kJogFirst]));
-    else
-        snprintf(out, n, "%d", (int)kStepSizes[_stepSel]);
+    snprintf(out, n, "%d", (int)stepSize());
 }
 
 // Adjust: axis (header), the axis strip, position, step size with its degrees (RA, DEC, AZ, ALT; Focus has steps only).
@@ -643,13 +626,14 @@ void UiController::renderAdjust(Canvas &c) const
 {
     char l[48], v[24];
     const TextId names[kAxes] = {TextId::LabelRa, TextId::LabelDec, TextId::LabelAz, TextId::AxisFocus, TextId::LabelAlt};
-    header(c, t(TextId::HdrAdjust), t(names[_axis]));
+    const bool stopped = _transient == TextId::HdrStopped && within(_now, _transientFrom, _transientMs);  // STOPPED stays on this page
+    header(c, t(stopped ? TextId::HdrStopped : TextId::HdrAdjust), t(names[_axis]));
     snprintf(l, sizeof l, "%s %ld", t(TextId::PosRow), (long)_m.axisPos[_axis]);
     c.text(Font::F6x10, 0, 13, l, false);
     stepText(v, sizeof v);
-    if (_stepSel < kJogFirst && _m.stepsPerDeg[_axis] > 0.0f)
+    if (_m.stepsPerDeg[_axis] > 0.0f)
     {
-        const float deg = kStepSizes[_stepSel] / _m.stepsPerDeg[_axis];
+        const float deg = stepSize() / _m.stepsPerDeg[_axis];
         const long d100 = lroundf(deg * 100.0f);
         if (d100 >= 1 && d100 < 100000)
             snprintf(l, sizeof l, "%s %s = %ld.%02ld%s", t(TextId::StepRow), v, d100 / 100, d100 % 100, kDeg);
@@ -658,10 +642,8 @@ void UiController::renderAdjust(Canvas &c) const
         else
             snprintf(l, sizeof l, "%s %s", t(TextId::StepRow), v);
     }
-    else if (_stepSel < kJogFirst)
-        snprintf(l, sizeof l, "%s %s", t(TextId::StepRow), v);
     else
-        snprintf(l, sizeof l, "%s", v);
+        snprintf(l, sizeof l, "%s %s", t(TextId::StepRow), v);
     c.text(Font::F6x10, 0, 23, l, false);
     int16_t x = 2;  // the axes in use in display order, the selected one inverted; 8 px gaps fit all five
     for (uint8_t i = 0; i < kAxes; ++i)

@@ -3862,6 +3862,17 @@ bool Mount::setHomeHere()
     return true;
 }
 
+bool Mount::setHomeAll()
+{
+    // Set home here, plus AZ and ALT (zeroed and stored, as upstream does on every stop) and the Focus counter (RAM only).
+    setHomeHere();
+    setAZALTHome();
+    #if FOCUS_STEPPER_TYPE != STEPPER_TYPE_NONE
+    _stepperFocus->setCurrentPosition(0);
+    #endif
+    return true;
+}
+
 void Mount::applyPendingHomeReference()
 {
     // Provisional until the mount is located: recomputed on every date, time, UTC offset or longitude change.

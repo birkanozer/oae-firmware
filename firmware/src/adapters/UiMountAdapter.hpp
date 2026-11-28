@@ -31,10 +31,6 @@ class UiMountAdapter
     bool _wasParking      = false;
     bool _parked          = false;
     bool _goingHome       = false;  // UI "Go home" running: reported as Homing until the axes stop
-    uint8_t _jogMask      = 0;      // directions of UI jogs held
-    bool _jogTail         = false;  // released, axes still decelerating
-    bool _jogResumeTrack  = false;  // was tracking before the jog
-    uint32_t _jogStoppedAt = 0;     // millis() when the axes first stopped in the tail, 0 = not yet
     #if SUPPLY_SENSE == 1
     core::SupplyFilter _supply;
     uint32_t _supplyMs = 0;  // last sample (millis)

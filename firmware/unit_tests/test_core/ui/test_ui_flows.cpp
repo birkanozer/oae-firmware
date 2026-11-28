@@ -1480,7 +1480,6 @@ int walk(Ui &u)
     u.m.raSeconds = 23 * 3600 + 59 * 60 + 59;
     u.m.targetRaSeconds = 11 * 3600 + 59 * 60 + 59;
     u.m.targetDecArcSec = 89 * 3600 + 59 * 60 + 59;
-    u.m.slewRate = 2;  // CENTER / ORTALA, the longest
     u.m.supplyVoltage = 24;
     u.m.synced = true;
     u.tick(1000);
@@ -1784,7 +1783,7 @@ TEST(UiFlowsTest, GoRechecksTargetAtClick)
 
 namespace {
 
-// Status -> Adjust (RA, step 100).
+// Status -> Adjust (RA, step 1000).
 void adjust(Ui &u)
 {
     menu(u, 2);
@@ -1798,14 +1797,12 @@ void options(Ui &u, int row)
         u.turn(static_cast<int8_t>(row));
 }
 
-// Set the step size by index in {1, 10, 100, 1000, 10000, JOG SLOW, JOG CENTER, JOG FIND, JOG MAX} (default 2), back on Adjust.
+// Set the current axis's step size by index 0..4 into its list (default 2), back on Adjust.
 void setStep(Ui &u, int idx)
 {
     u.hold();  // options, cursor on Step
-    clicks(u, (idx - 2 + 9) % 9);
-    u.hold();  // main menu
-    u.turn(2);
-    u.click();
+    clicks(u, (idx - 2 + 5) % 5);
+    u.hold();  // back to Adjust
 }
 
 bool contains(const Ui &u, const std::string &p)
@@ -1829,12 +1826,12 @@ TEST(UiFlowsTest, AdjustTurnEmitsMoveSteps)
     bool f;
     UiAction a = get(u, Kind::MoveSteps, f);
     EXPECT_TRUE(f);
-    EXPECT_EQ(100, a.a);
+    EXPECT_EQ(1000, a.a);
     EXPECT_EQ(0, a.b);
     u.turn(-1);
     a = get(u, Kind::MoveSteps, f);
     EXPECT_TRUE(f);
-    EXPECT_EQ(-100, a.a);
+    EXPECT_EQ(-1000, a.a);
     EXPECT_EQ(0, u.c.violations);
 }
 
@@ -1843,7 +1840,7 @@ TEST(UiFlowsTest, AdjustDetentsCoalescePerTick)
     Ui u;
     u.tick();
     adjust(u);
-    setStep(u, 4);
+    setStep(u, 3);  // RA 10000
     u.actions();
     for (int i = 0; i < 7; ++i)
     {
@@ -1899,56 +1896,87 @@ TEST(UiFlowsTest, AdjustClickCyclesAxes)
     EXPECT_TRUE(v.inv("RA"));
 }
 
-TEST(UiFlowsTest, AdjustJogUsesJogStartStop)
+// The step lists per axis id (0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT).
+const int32_t kLists[5][5] = {{10, 100, 1000, 10000, 50000},
+                              {10, 100, 1000, 10000, 50000},
+                              {100, 1000, 10000, 60000, 300000},
+                              {1, 10, 100, 1000, 10000},
+                              {100, 1000, 10000, 60000, 300000}};
+
+// One detent on the current axis: the MoveSteps steps (0 = none emitted for that axis).
+int32_t oneDetent(Ui &u, int axis)
+{
+    u.actions();
+    u.turn(1);
+    bool f;
+    const UiAction a = get(u, Kind::MoveSteps, f);
+    u.tick(400);  // the step latch expires
+    return f && a.b == axis ? a.a : 0;
+}
+
+TEST(UiFlowsTest, AdjustStepListsPerAxisDefaultMiddle)
+{
+    Ui u;
+    u.m.hasAz = u.m.hasFocus = u.m.hasAlt = true;
+    u.tick();
+    adjust(u);
+    const int order[5] = {0, 1, 2, 4, 3};  // display order
+    for (int i = 0; i < 5; ++i)
+    {
+        const int ax = order[i];
+        EXPECT_EQ(kLists[ax][2], oneDetent(u, ax)) << ax;  // every axis starts at the middle entry
+        for (int k = 3; k < 8; ++k)  // click on the step option cycles 0..4 for this axis only, wrapping
+        {
+            u.hold();
+            u.click();
+            u.hold();
+            EXPECT_EQ(kLists[ax][k % 5], oneDetent(u, ax)) << ax << " " << k;
+        }
+        u.click();  // next axis
+    }
+}
+
+TEST(UiFlowsTest, AdjustStepSizeIsKeptPerAxis)
 {
     Ui u;
     u.m.hasAz = true;
     u.tick();
     adjust(u);
-    setStep(u, 6);  // JOG CENTER
-    EXPECT_TRUE(contains(u, "JOG CENTER"));
-    u.actions();
-    u.turn(1);
-    auto v = u.acts();
-    ASSERT_GE(v.size(), 2u);
-    EXPECT_EQ(Kind::SetSlewRate, v[0].kind);
-    EXPECT_EQ(2, v[0].a);
-    EXPECT_EQ(Kind::JogStart, v[1].kind);
-    EXPECT_EQ(2, v[1].a);  // E
-    u.state(MountState::Jogging);
-    u.turn(1);  // same direction: nothing new
-    EXPECT_TRUE(u.acts().empty());
-    u.turn(-1);  // reverses: stop E, start W
-    v = u.acts();
-    bool stopE = false, startW = false;
-    for (const UiAction &a : v)
-    {
-        stopE |= a.kind == Kind::JogStop && a.a == 2;
-        startW |= a.kind == Kind::JogStart && a.a == 8;
-    }
-    EXPECT_TRUE(stopE && startW);
-    u.tick(300);
-    UiAction s;
-    EXPECT_TRUE(Ui::find(u.acts(), Kind::JogStop, s));
-    EXPECT_EQ(8, s.a);
-    // DEC: N/S.
-    u.state(MountState::Tracking);
+    setStep(u, 4);  // RA 50000
+    u.click();  // DEC still 1000
+    EXPECT_EQ(1000, oneDetent(u, 1));
+    u.click();  // AZ
+    setStep(u, 0);  // 100
+    u.click();  // back to RA (ALT and Focus are not fitted)
+    EXPECT_EQ(50000, oneDetent(u, 0));
+    u.hold();  // leave Adjust (options, Main menu row, status) and come back: still kept
+    u.turn(4);
     u.click();
-    u.actions();
-    u.turn(1);
-    EXPECT_TRUE(Ui::find(u.acts(), Kind::JogStart, s));
-    EXPECT_EQ(1, s.a);
-    u.tick(300);
-    u.actions();
-    u.state(MountState::Tracking);
-    // AZ has no JOG sizes: the step clamps to 10000 and turning moves by steps.
+    u.hold();
+    menu(u, 2);
+    EXPECT_EQ(50000, oneDetent(u, 0));
     u.click();
+    u.click();
+    EXPECT_EQ(100, oneDetent(u, 2));
+}
+
+TEST(UiFlowsTest, AdjustLargestMoveFitsInt32)
+{
+    Ui u;
+    u.m.hasAz = true;
+    u.tick();
+    adjust(u);
+    u.click();
+    u.click();  // AZ
+    setStep(u, 4);  // 300000
     u.actions();
-    u.turn(1);
+    u.t += 10;
+    u.ui.onTurn(127, u.t);
+    u.tick();
     bool f;
     const UiAction a = get(u, Kind::MoveSteps, f);
-    EXPECT_TRUE(f);
-    EXPECT_EQ(10000, a.a);
+    ASSERT_TRUE(f);
+    EXPECT_EQ(127 * 300000, a.a);
     EXPECT_EQ(2, a.b);
 }
 
@@ -1961,10 +1989,117 @@ TEST(UiFlowsTest, AdjustLongPressOpensOptions)
     EXPECT_TRUE(starts(u, "Step"));
     EXPECT_TRUE(u.drew("Sync on target"));
     EXPECT_TRUE(u.drew("Set home here"));
+    EXPECT_TRUE(u.drew("Set home all"));
+    u.turn(5);
+    EXPECT_TRUE(u.inv("Main menu"));
+    u.turn(1);
+    EXPECT_TRUE(u.inv("Back"));  // Main menu is the row before it
     EXPECT_TRUE(u.drew("Go home"));
-    u.hold();  // back to the main menu
-    EXPECT_TRUE(u.drew("MENU"));
+    u.hold();  // long press returns to Adjust, not the main menu
+    EXPECT_TRUE(u.drew("ADJUST"));
+    EXPECT_FALSE(u.drew("MENU"));
     EXPECT_EQ(0, u.c.violations);
+}
+
+TEST(UiFlowsTest, AdjustOptionsMainMenuRow)
+{
+    for (MountState s : {MountState::Tracking, MountState::Idle})  // never locked
+    {
+        Ui u;
+        u.tick();
+        adjust(u);
+        u.state(s);
+        u.tick(600);  // past the M2 click ignore after row 0 changed
+        options(u, 5);
+        EXPECT_TRUE(u.inv("Main menu"));
+        u.actions();
+        u.click();
+        EXPECT_FALSE(Ui::has(u.actions(), Kind::BeepError));
+        EXPECT_TRUE(u.drew("MENU"));
+        EXPECT_EQ(0, u.c.violations);
+    }
+    Ui t;  // Turkish
+    t.tick();
+    toggleLang(t);
+    adjust(t);
+    t.hold();
+    t.turn(5);
+    EXPECT_TRUE(t.inv("Ana menu"));
+}
+
+TEST(UiFlowsTest, AdjustStopStaysOnAdjust)
+{
+    for (int hold = 0; hold < 2; ++hold)
+        for (MountState s : {MountState::Slewing, MountState::Jogging, MountState::Homing})
+        {
+            Ui u;
+            u.tick();
+            adjust(u);
+            u.click();  // DEC
+            u.state(s);
+            u.actions();
+            if (hold)
+                u.hold();
+            else
+                u.click();
+            const auto a = u.actions();
+            EXPECT_TRUE(Ui::has(a, Kind::Stop));
+            EXPECT_TRUE(Ui::has(a, Kind::BeepLong));
+            EXPECT_TRUE(u.drew("STOPPED"));  // the transient shows in the Adjust header
+            EXPECT_TRUE(contains(u, "Pos"));
+            EXPECT_TRUE(u.inv("DEC"));
+            u.state(MountState::Idle);
+            u.click();  // the next click is an axis click, not swallowed by the M2 ignore window
+            EXPECT_TRUE(u.inv("RA"));
+            u.tick(2100);
+            EXPECT_FALSE(u.drew("STOPPED"));
+            EXPECT_TRUE(u.drew("ADJUST"));
+        }
+}
+
+TEST(UiFlowsTest, AdjustTurnDuringStopDecelerationIsIgnored)
+{
+    Ui u;
+    u.tick();
+    adjust(u);
+    u.state(MountState::Slewing);
+    u.click();  // STOP: stays on Adjust, STOPPED shows, the mount still decelerates
+    u.actions();
+    u.turn(1);  // a stray detent must not start a new move
+    EXPECT_FALSE(Ui::has(u.actions(), Kind::MoveSteps));
+    u.state(MountState::Idle);
+    u.tick(2100);  // STOPPED is over: turning moves again
+    u.turn(1);
+    EXPECT_TRUE(Ui::has(u.actions(), Kind::MoveSteps));
+}
+
+TEST(UiFlowsTest, AdjustOtherTransientsKeepTheAdjustHeader)
+{
+    Ui u;
+    u.tick();
+    adjust(u);
+    u.hold();
+    u.turn(1);
+    u.click();  // Sync on target: SYNCED goes to Status
+    EXPECT_TRUE(u.drew("SYNCED"));
+    u.click();  // menu
+    u.turn(2);
+    u.click();  // Adjust again while SYNCED still shows
+    EXPECT_TRUE(u.drew("ADJUST"));
+    EXPECT_FALSE(u.drew("SYNCED"));
+}
+
+TEST(UiFlowsTest, StopFromOtherScreensGoesToStatus)
+{
+    Ui u;
+    u.tick();
+    adjust(u);
+    u.hold();  // options
+    u.state(MountState::Slewing);
+    u.click();
+    EXPECT_TRUE(u.drew("STOPPED"));
+    EXPECT_FALSE(u.drew("Sync on target"));
+    EXPECT_FALSE(contains(u, "Pos"));
 }
 
 TEST(UiFlowsTest, AdjustLongPressWhileMovingIsStop)
@@ -2096,18 +2231,17 @@ TEST(UiFlowsTest, AdjustAltMovesAxis4AndItsFaultLocksOnlyAlt)
     a = get(u, Kind::MoveSteps, f);
     EXPECT_TRUE(f);
     EXPECT_EQ(4, a.b);
-    EXPECT_EQ(-100, a.a);
+    EXPECT_EQ(-10000, a.a);  // ALT default: the middle of its list
 }
 
 TEST(UiFlowsTest, AdjustShowsAltPositionAndDegrees)
 {
     Ui u;
     u.m.hasAlt = true;
-    u.m.stepsPerDeg[4] = 1000.0f;
+    u.m.stepsPerDeg[4] = 10000.0f;
     u.m.axisPos[4] = 4242;
     u.tick();
     adjust(u);
-    setStep(u, 3);
     clicks(u, 2);  // RA -> DEC -> ALT
     ASSERT_TRUE(u.inv("ALT"));
     EXPECT_TRUE(contains(u, "4242"));
@@ -2198,6 +2332,90 @@ TEST(UiFlowsTest, SetHomeNeedsIdle)
     EXPECT_EQ(0, v.c.violations + w.c.violations);
 }
 
+TEST(UiFlowsTest, SetHomeAllRowConfirmAndLock)
+{
+    Ui t;  // Turkish text
+    t.m.state = MountState::Idle;
+    t.tick();
+    toggleLang(t);
+    adjust(t);
+    options(t, 3);
+    EXPECT_TRUE(t.inv("Tumunu eve ayarla"));
+    t.click();
+    EXPECT_TRUE(t.drew("Tumunu eve ayarla?"));
+
+    Ui u;  // tracking: locked
+    u.tick();
+    adjust(u);
+    options(u, 3);
+    EXPECT_TRUE(u.inv("Set home all"));
+    u.actions();
+    u.click();
+    EXPECT_TRUE(Ui::has(u.actions(), Kind::BeepError));
+    EXPECT_TRUE(u.drew("Stop the mount first"));
+    EXPECT_FALSE(u.drew("Set home all?"));
+
+    Ui v;  // idle: confirm, then SetHomeAll (and not SetHome)
+    v.m.state = MountState::Idle;
+    v.tick();
+    adjust(v);
+    options(v, 3);
+    v.click();
+    EXPECT_TRUE(v.drew("Set home all?"));
+    v.actions();
+    v.click();
+    const auto a = v.actions();
+    EXPECT_TRUE(Ui::has(a, Kind::SetHomeAll));
+    EXPECT_FALSE(Ui::has(a, Kind::SetHome));
+    EXPECT_TRUE(v.drew("HOME SET"));
+    EXPECT_FALSE(v.drew("Set home all?"));  // on Status
+
+    Ui w;  // the confirm's long press goes back to the options
+    w.m.state = MountState::Idle;
+    w.tick();
+    adjust(w);
+    options(w, 3);
+    w.click();
+    w.actions();
+    w.hold();
+    EXPECT_TRUE(w.inv("Set home all"));
+    EXPECT_FALSE(Ui::has(w.actions(), Kind::SetHomeAll));
+
+    Ui x;  // the lock again at the click
+    x.m.state = MountState::Idle;
+    x.tick();
+    adjust(x);
+    options(x, 3);
+    x.click();
+    x.state(MountState::Tracking);
+    x.actions();
+    x.click(600);  // past the click ignore after a state change
+    const auto b = x.actions();
+    EXPECT_TRUE(Ui::has(b, Kind::BeepError));
+    EXPECT_FALSE(Ui::has(b, Kind::SetHomeAll));
+    EXPECT_TRUE(x.inv("Set home all"));
+    EXPECT_EQ(0, t.c.violations + u.c.violations + v.c.violations + w.c.violations + x.c.violations);
+}
+
+TEST(UiFlowsTest, SetHomeHereConfirmStillSetsHomeHere)
+{
+    Ui u;  // opened after a Set home all was cancelled: still the "here" question
+    u.m.state = MountState::Idle;
+    u.tick();
+    adjust(u);
+    options(u, 3);
+    u.click();
+    u.hold();
+    u.turn(-1);
+    u.click();
+    EXPECT_TRUE(u.drew("Set home here?"));
+    u.actions();
+    u.click();
+    const auto a = u.actions();
+    EXPECT_TRUE(Ui::has(a, Kind::SetHome));
+    EXPECT_FALSE(Ui::has(a, Kind::SetHomeAll));
+}
+
 TEST(UiFlowsTest, GoHomeAllowedFromTracking)
 {
     for (MountState s : {MountState::Tracking, MountState::Idle})
@@ -2206,7 +2424,7 @@ TEST(UiFlowsTest, GoHomeAllowedFromTracking)
         u.m.state = s;
         u.tick();
         adjust(u);
-        options(u, 3);
+        options(u, 4);
         u.actions();
         u.click();
         EXPECT_TRUE(Ui::has(u.actions(), Kind::GoHome));
@@ -2243,7 +2461,6 @@ TEST(UiFlowsTest, AdjustShowsDegreesForStep)
     u.m.axisPos[3] = -77;
     u.tick();
     adjust(u);
-    setStep(u, 3);
     EXPECT_TRUE(contains(u, "1000"));
     EXPECT_TRUE(contains(u, "1.00"));
     EXPECT_TRUE(contains(u, "12345"));
@@ -2305,7 +2522,7 @@ TEST(UiFlowsTest, AdjustIgnoresKnobAcceleration)
 {
     Ui u;
     u.tick();
-    adjust(u);  // RA, step 100
+    adjust(u);  // RA, step 1000
     u.actions();
     u.t += 10;
     u.ui.onTurn(2, u.t, true);  // fast detents: exactly detents * step
@@ -2313,7 +2530,7 @@ TEST(UiFlowsTest, AdjustIgnoresKnobAcceleration)
     bool f = false;
     UiAction a = get(u, Kind::MoveSteps, f);
     EXPECT_TRUE(f);
-    EXPECT_EQ(200, a.a);
+    EXPECT_EQ(2000, a.a);
 
     Ui e;  // an editor still accelerates
     e.m.targetRaSeconds = 10 * 3600;

@@ -30,7 +30,6 @@ MountSnapshot base()
     m.latArcSec = 41 * 3600 + 60;
     m.lonArcSec = 28 * 3600 + 58 * 60;
     m.state = MountState::Tracking;
-    m.slewRate = 2;
     m.dateSet = true;
     m.timeSet = true;
     m.supplyVoltage = 24;

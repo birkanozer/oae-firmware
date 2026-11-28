@@ -40,6 +40,7 @@ enum class TextId : uint8_t
     // Home / Park
     GoHome,
     SetHomeHere,
+    SetHomeAll,
     // Setup
     Date,
     Time,
@@ -133,10 +134,6 @@ enum class TextId : uint8_t
     DateTimeLost,
     TurnToWake,
     // L3/L4 (flows, jog, home/park, settings)
-    SpeedSlow,
-    SpeedCenter,
-    SpeedFind,
-    SpeedMax,
     HdrSync,
     HdrConfirm,
     HdrPoint,
@@ -166,6 +163,7 @@ enum class TextId : uint8_t
     BigJump,
     ClearsSync,
     SetHomeQ,
+    SetHomeAllQ,
     ShortSun,
     ShortMove,
     Away,
@@ -183,9 +181,9 @@ enum class TextId : uint8_t
     AxisFocus,
     PosRow,
     StepRow,
-    JogWord,
     FootAdjust,
     MsgStopFirst,
+    MainMenu,
     // Settings > Network
     NetworkRow,
     HdrNetwork,

@@ -7,8 +7,6 @@
     #include "UiMountAdapter.hpp"
     #include "inc/Globals.hpp"
 
-static constexpr uint32_t kJogResumeMs = 500;
-
 void UiMountAdapter::begin()
 {
     // Unplanned reset: watchdog, software or low-power reset. Power-on and the reset pin are a normal start.
@@ -44,22 +42,8 @@ core::MountState UiMountAdapter::state()
         _goingHome = false;
     if (_goingHome)
         return MountState::Homing;
-    // A UI jog (keys held, plus the deceleration tail after release) is a jog, not a GoTo: Slewing->Tracking would beep ARRIVED.
-    // The mount only sets STATUS_SLEWING_MANUAL from setManualSlewMode, which startSlewing(direction) does not call.
-    // After a jog from tracking, upstream restarts tracking when the axes stop: hold Jogging until it does (at most
-    // kJogResumeMs), or the UI would see Idle for a poll and flip the menu row 0 label twice.
-    if (_jogTail && _jogMask == 0 && !_mount.isSlewingRAorDEC())
-    {
-        const uint32_t now = millis();
-        if (_jogStoppedAt == 0)
-            _jogStoppedAt = now ? now : 1;
-        if (!_jogResumeTrack || _mount.isTracking() || now - _jogStoppedAt > kJogResumeMs)
-        {
-            _jogTail      = false;
-            _jogStoppedAt = 0;
-        }
-    }
-    if (_jogMask != 0 || _jogTail || (_mount.mountStatus() & STATUS_SLEWING_MANUAL))
+    // The mount sets STATUS_SLEWING_MANUAL for a manual (LX200) jog: report it as Jogging so Slewing->Tracking never beeps ARRIVED.
+    if (_mount.mountStatus() & STATUS_SLEWING_MANUAL)
         return MountState::Jogging;
     // AZ, ALT and Focus step moves (Adjust page) run on their own steppers: count them as moving so a click is STOP.
     if (_mount.isAxisRunning(AZIMUTH_STEPS) || _mount.isAxisRunning(ALTITUDE_STEPS) || _mount.isAxisRunning(FOCUS_STEPS))
@@ -104,7 +88,6 @@ void UiMountAdapter::fill(core::MountSnapshot &s)
     s.utcOffsetHours  = _mount.getLocalUtcOffset();  // east-positive on both sides (the minus is LX200 wire convention only)
     s.latArcSec       = _mount.latitude().getTotalSeconds();
     s.lonArcSec       = _mount.longitude().getTotalSeconds();
-    s.slewRate        = _mount.getSlewRate();
     s.dateSet         = _mount.isDateSet();
     s.timeSet         = _mount.isTimeSet();
     s.rebooted        = _rebooted;
@@ -147,8 +130,6 @@ void UiMountAdapter::apply(const core::UiAction &a)
     {
         case Kind::Stop:
             _goingHome = false;
-            _jogMask = 0;
-            _jogTail = false;
             _mount.stopAll();  // stays stopped: the arrival block does not restart tracking
             _mount.stopSlewing(AZIMUTH_STEPS);  // stopAll() only covers RA, DEC and tracking
             _mount.stopSlewing(ALTITUDE_STEPS);
@@ -156,39 +137,13 @@ void UiMountAdapter::apply(const core::UiAction &a)
             break;
         case Kind::TrackOn:
             _goingHome = false;
-            _jogMask = 0;
-            _jogTail = false;
             _mount.startSlewing(TRACKING);
             break;
         case Kind::TrackOff:
             _mount.stopSlewing(TRACKING);
             break;
-        case Kind::JogStart:  // direction bits N1 E2 S4 W8 equal the mount's
-            _goingHome = false;
-            if (_jogMask == 0 && !_jogTail)
-                _jogResumeTrack = _mount.isTracking();  // startSlewing(direction) stops tracking: ask first
-            _mount.startSlewing(a.a);
-            if (!_mount.isParking())
-            {
-                _jogMask |= a.a & ALL_DIRECTIONS;
-                if (!_jogResumeTrack)
-                    _mount.suppressTrackingOnArrival();  // not tracking before the jog: stay idle after it
-            }
-            break;
-        case Kind::JogStop:
-            _mount.stopSlewing(a.a);
-            _jogMask &= ~a.a;
-            _jogStoppedAt = 0;
-            if (_jogMask == 0)
-                _jogTail = true;  // still Jogging until the axes stop
-            break;
-        case Kind::SetSlewRate:
-            _mount.setSlewRate(a.a);
-            break;
         case Kind::Goto:
             _goingHome = false;
-            _jogMask = 0;
-            _jogTail = false;
             _mount.targetRA().set(a.a / 3600, a.a / 60 % 60, a.a % 60);
             _mount.targetDEC() = Declination::fromCelestialSeconds(a.b);
             _mount.startSlewingToTarget();
@@ -230,8 +185,6 @@ void UiMountAdapter::apply(const core::UiAction &a)
             break;
         }
         case Kind::GoHome:
-            _jogMask = 0;
-            _jogTail = false;
             _mount.stopSlewing(TRACKING);  // also when RA is already at home and no slew follows
             _mount.startSlewingToHome();
             _mount.suppressTrackingOnArrival();  // after a UI home the mount is idle, not tracking (startSlewingToHome clears the flag)
@@ -239,6 +192,10 @@ void UiMountAdapter::apply(const core::UiAction &a)
             break;
         case Kind::SetHome:  // the UI offers it only when idle: setHome() waits for the axes
             _mount.setHomeHere();
+            _synced = false;
+            break;
+        case Kind::SetHomeAll:  // as SetHome, plus the AZ, ALT and Focus counters
+            _mount.setHomeAll();
             _synced = false;
             break;
         case Kind::MoveSteps:  // same call as the LX200 :MX command
@@ -253,14 +210,10 @@ void UiMountAdapter::apply(const core::UiAction &a)
         }
         case Kind::Park:
             _goingHome = false;
-            _jogMask = 0;
-            _jogTail = false;
             _mount.startPark();
             break;
         case Kind::Unpark:
             _goingHome = false;
-            _jogMask = 0;
-            _jogTail = false;
             _mount.startSlewing(TRACKING);
             break;
         case Kind::SetSupplyVoltage:

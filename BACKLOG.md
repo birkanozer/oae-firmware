@@ -79,18 +79,13 @@ file. Slices and their order: `docs/architecture.md` §8.
 ## Bugs
 
 - Step move during a GoTo started from idle makes the GoTo end idle (accepted in point-adjust).
-- Adjust page (bench, 2026-11-28, v0.6.2):
-  - Long press back from the Adjust options page (Step size, Sync on target, Set home here, Go home)
-    returns to the main menu instead of the Adjust page.
-  - Stopping a move on the Adjust page (click while moving) must stay on the Adjust page.
-  - Step size is shared by all axes: make it per axis, with options and speeds that suit each axis
-    (RA/DEC 2000 and 1762 steps/deg on NEMA17, AZ 64 054 and ALT 59 479 steps/deg on 28BYJ-48; today the
-    largest step, 10 000, is 5 deg on DEC but 0.16 deg on AZ). Drop the Jog (SLOW/CENTER/FIND/MAX) options.
-  - DEC skips too many steps when moving. Suspects: speed (DEC_SLEWING_SPEED_DEG 4 deg/s x 2000 steps/deg
-    = 8000 steps/s, above the 5 kHz stepper ISR) and acceleration now that DEC is 16x finer than before
-    the v0.6.2 fix; torque at 75 % of 470 mA; spreadCycle switch at TMC_TPWMTHRS.
-  - ALT skips too much. Suspects: speed 400 full steps/s (6400 microsteps/s, also above the ISR rate)
-    is near the 28BYJ-48's limit at 91 mA; acceleration; load on the ALT rod.
+- DEC and ALT motors buzz from the first step and barely turn (bench 2026-11-28). The fault follows the motor to
+  any socket (swap test), and spreadCycle or half speed did not help, so it is the motor, its cable or a coil: ohm
+  both coil pairs at the plug against the good twin (RA for DEC, AZ for ALT); for the ALT 28BYJ-48 swap the two
+  wires of one coil (`docs/wiring.md`). DEC already stuck at places on v0.6.1. Code check:
+  `plans/archive/adjust-per-axis/stall-investigation.md`.
+- Firmware never reads TMC2209 status after boot (DRV_STATUS open-load ola/olb, GSTAT, IFCNT), so an open coil or
+  driver reset looks healthy. A driver check page on the LCD would have shown this fault.
 
 - `robin_e3` core runs at 64 MHz (measured over SWD) while `F_CPU` says 72 MHz, likely HSI instead of the 8 MHz HSE crystal. LCD DWT delays use `F_CPU` (12.5 % long, harmless); switch them to `SystemCoreClock` and consider running the PLL from HSE at 72 MHz.
 

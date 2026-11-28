@@ -71,7 +71,8 @@
 // ALT: same motor and current rule as AZ (150 mA peak = 91 mA RMS), hold 30 %, released when idle (ALT_ALWAYS_ON 0).
 // ALTITUDE_STEPS_PER_REV (OAE) = ALT_CORRECTION_FACTOR * (ALT_CIRCUMFERENCE / ALT_ROD_PITCH) * ALT_STEPPER_SPR * ALT_MICROSTEPPING,
 // with the OAE 130 mm radius and 1.25 mm rod pitch: 653.5 rod turns * 2048 * 16 = 21.41 M microsteps per altitude turn.
-// Speed and acceleration in microsteps/s, like AZ.
+// Speed and acceleration in microsteps/s, like AZ. 400 full steps/s (6400 microsteps/s) was above the 5 kHz stepper
+// interrupt, so ALT runs at 200 full steps/s and 100 full steps/s^2.
 #define ALT_MOTOR_CURRENT_RATING      150  // mA, peak
 #define ALT_OPERATING_CURRENT_SETTING 100  // %
 #define ALT_MOTOR_HOLD_SETTING        30
@@ -79,8 +80,8 @@
 #define ALT_COIL_RESISTANCE_OHM       50.0f
 #define ALT_STEPPER_SPR               2048
 #define ALT_MICROSTEPPING             16
-#define ALT_STEPPER_SPEED             (400 * ALT_MICROSTEPPING)
-#define ALT_STEPPER_ACCELERATION      (200 * ALT_MICROSTEPPING)
+#define ALT_STEPPER_SPEED             (200 * ALT_MICROSTEPPING)
+#define ALT_STEPPER_ACCELERATION      (100 * ALT_MICROSTEPPING)
 
 // Focus on the ULN2003: half steps, so 4096 per output turn and no microstepping. No UART, no current setting and no
 // fault detection. Speed and acceleration in half steps/s: the 28BYJ-48 at 5 V stalls near 1000/s. The coils are

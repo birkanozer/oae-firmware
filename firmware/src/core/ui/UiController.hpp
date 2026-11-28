@@ -58,7 +58,6 @@ struct MountSnapshot
     int8_t month, day, utcOffsetHours;
     int32_t latArcSec, lonArcSec;
     MountState state;
-    uint8_t slewRate;  // 1..4
     bool dateSet, timeSet, rebooted, synced;
     uint8_t faultCode;  // 0 = none
     uint8_t supplyVoltage;  // applied: 12, 15, 20 or 24 (0 = unknown, shown as the default)
@@ -82,9 +81,6 @@ struct UiAction
         Stop,
         TrackOn,
         TrackOff,
-        JogStart,
-        JogStop,
-        SetSlewRate,
         Goto,
         Sync,
         SetDate,
@@ -94,6 +90,7 @@ struct UiAction
         SetLongitude,
         GoHome,
         SetHome,
+        SetHomeAll,
         Park,
         Unpark,
         Beep,
@@ -103,8 +100,8 @@ struct UiAction
         MoveSteps  // a = signed steps, b = axis (0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT)
     };
     Kind kind;
-    // JogStart/JogStop: direction bits N1 E2 S4 W8; Goto/Sync: raSeconds; SetDate: yyyymmdd; SetTime: seconds of day;
-    // SetLatitude/SetLongitude: arc-seconds; SetUtcOffset: hours; SetSlewRate: 1..4; SetSupplyVoltage: volts;
+    // Goto/Sync: raSeconds; SetDate: yyyymmdd; SetTime: seconds of day;
+    // SetLatitude/SetLongitude: arc-seconds; SetUtcOffset: hours; SetSupplyVoltage: volts;
     // MoveSteps: steps.
     int32_t a;
     int32_t b;  // Goto/Sync: decArcSec; MoveSteps: axis
@@ -144,7 +141,7 @@ class UiController
         ClearsSync,
         Settings,
         Adjust,  // step moves per detent on the selected axis
-        AdjustOptions,  // step size, sync on target, set home, go home
+        AdjustOptions,  // step size, sync on target, set home, go home, main menu
         SetHomeConfirm,
         Network  // under Settings: what the bridge reports, Own WiFi (click cycles it)
     };
@@ -197,7 +194,7 @@ class UiController
     void applyHold(uint32_t nowMs);
     void applyTurn(int8_t detents, int16_t extra, uint32_t nowMs);
     bool mountMoving() const;  // from the snapshot
-    bool moving() const { return mountMoving() || _jogDir != 0 || _stepLatch; }  // an own jog or step move not reported yet counts
+    bool moving() const { return mountMoving() || _stepLatch; }  // an own step move not reported yet counts
     void stop(uint32_t nowMs);
     void clickScreen(uint32_t nowMs);
     void holdScreen();
@@ -230,8 +227,7 @@ class UiController
     bool axisFitted(uint8_t a) const { return a < 2 || (a == 2 && _m.hasAz) || (a == 3 && _m.hasFocus) || (a == 4 && _m.hasAlt); }
     static constexpr uint8_t kAxes = 5;
     static constexpr uint8_t kAxisOrder[kAxes] = {0, 1, 2, 4, 3};  // display order RA, DEC, AZ, ALT, Focus (axis ids)
-    void jogStop();
-    TextId speedText() const;
+    int32_t stepSize() const;  // steps per detent on the current axis
     int supplyVolts() const
     {
         const int8_t s = _settings.get(SettingId::Supply);
@@ -271,7 +267,7 @@ class UiController
     void renderConfirm(Canvas &c) const;
     void renderRefused(Canvas &c) const;
     void renderAdjust(Canvas &c) const;
-    void stepText(char *out, size_t n) const;  // "1000" or "JOG SLOW"
+    void stepText(char *out, size_t n) const;  // "1000"
     void supplyText(char *out, size_t n) const;  // "Auto 15 15.1", "Auto 15 --", "Auto --", "15 V (15.1)" or "15 V"
     void renderSmallConfirm(Canvas &c, TextId hdr, TextId msg) const;
     void renderNetwork(Canvas &c) const;
@@ -294,6 +290,7 @@ class UiController
     bool _fastPath = false;  // status alert: Date then Time, applied together
     int32_t _ra = 0, _dec = 0;  // Point values being edited or confirmed
     bool _pointSync = false;  // PointConfirm: false = GO, true = SYNC
+    bool _homeAll = false;  // SetHomeConfirm: false = here (RA/DEC), true = all axes
     bool _haveTarget = false;  // last GoTo target latched (the snapshot only reports it while slewing)
     int32_t _tgtRa = 0, _tgtDec = 0;
     int32_t _pendingDate = 0;
@@ -306,9 +303,7 @@ class UiController
     uint8_t _pendingN = 0;
     Screen _ret = Screen::Status;  // after ClearsSync
     uint8_t _axis = 0;  // Adjust: axis id, 0 RA, 1 DEC, 2 AZ, 3 Focus, 4 ALT
-    uint8_t _stepSel = 2;  // Adjust: 0..4 = 1, 10, 100, 1000, 10000 steps; 5..8 = JOG SLOW..MAX (RA/DEC only)
-    uint8_t _jogDir = 0;  // own jog in progress (0 = none)
-    uint32_t _jogMs = 0;
+    uint8_t _stepSel[kAxes] = {2, 2, 2, 2, 2};  // Adjust: index 0..4 into the axis's step list, per axis id
     bool _stepLatch = false;  // own MoveSteps emitted, snapshot not moving yet (cleared on motion or after kStepLatchMs)
     uint32_t _stepMs = 0;
     UiSettings _settings;

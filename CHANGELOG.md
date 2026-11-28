@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.0] - 2026-11-28
+
+### Added
+
+- Adjust options: **Set home all** sets home on every axis at once: RA and DEC as Set home here, AZ and ALT zeroed and stored like upstream, Focus zeroed. Same idle-only lock and confirm screen.
+
+### Changed
+
+- Adjust page: step size is kept per axis, with lists that suit each motor (RA and DEC 10, 100, 1 000, 10 000, 50 000 steps; AZ and ALT 100, 1 000, 10 000, 60 000, 300 000; Focus 1 to 10 000 as before). The JOG SLOW / CENTER / FIND / MAX options are gone from the onboard screen; LX200 jogging is unchanged.
+- Adjust options end with a Main menu row; long press on the options returns to Adjust.
+- ALT runs at 200 full steps/s and 100 full steps/s² (was 400 and 200): 6 400 microsteps/s was above the 5 kHz stepper interrupt.
+
+### Fixed
+
+- Long press on the Adjust options went to the main menu instead of back to Adjust.
+- Stopping a move on the Adjust page jumped to the status screen; it now stays on Adjust, and knob turns are ignored while the stopped axis slows down.
+
 ## [v0.6.2] - 2026-11-28
 
 ### Fixed

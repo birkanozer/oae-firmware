@@ -102,7 +102,7 @@ void UiController::push(UiAction::Kind k, int32_t a, int32_t b)
     }
     _queue[_qCount++] = {k, a, b};
     using K = UiAction::Kind;
-    if (k == K::Goto || k == K::GoHome || k == K::Park || k == K::JogStart || k == K::MoveSteps)
+    if (k == K::Goto || k == K::GoHome || k == K::Park || k == K::MoveSteps)
         _motionPushed = true;
 }
 
@@ -147,13 +147,13 @@ void UiController::clickTick()
 
 void UiController::stop(uint32_t nowMs)
 {
-    push(UiAction::Kind::Stop);  // stops all motors, an own jog included
+    push(UiAction::Kind::Stop);  // stops all motors
     push(UiAction::Kind::BeepLong);
     showTransient(TextId::HdrStopped, kStoppedMs, nowMs);
-    _jogDir = 0;
     _stepLatch = false;
     _saver = false;
-    _screen = Screen::Status;
+    if (_screen != Screen::Adjust)  // Adjust stays: the next step move follows
+        _screen = Screen::Status;
 }
 
 // Inputs are only queued; tick() applies them after it has seen the new snapshot, so a click
@@ -198,7 +198,7 @@ void UiController::onTurn(int8_t detents, uint32_t nowMs, bool fast)
 void UiController::applyClick(uint32_t nowMs)
 {
     _lastInputMs = nowMs;
-    if (moving())  // M1: any click on any screen stops, the Jog screen too
+    if (moving())  // M1: any click on any screen stops
         return stop(nowMs);
     if (_saver)  // M3: first input only wakes
     {
@@ -235,8 +235,10 @@ void UiController::applyHold(uint32_t nowMs)
 void UiController::applyTurn(int8_t detents, int16_t extra, uint32_t nowMs)
 {
     _lastInputMs = nowMs;
-    // Turning does nothing while moving, except on Adjust: it continues a jog or step move (not while homing or parking).
-    if (moving() && !(_screen == Screen::Adjust && _m.state != MountState::Homing && _m.state != MountState::Parking))
+    // Turning does nothing while moving, except on Adjust: it continues a step move (not while homing or parking, nor
+    // while the mount still decelerates after a STOP).
+    if (moving() && !(_screen == Screen::Adjust && _m.state != MountState::Homing && _m.state != MountState::Parking &&
+                      _transient != TextId::HdrStopped))
         return;
     if (_saver)
     {
@@ -324,8 +326,6 @@ void UiController::clickScreen(uint32_t nowMs)
                 i = static_cast<uint8_t>((i + 1) % kAxes);
             while (!axisFitted(kAxisOrder[i]));
             _axis = kAxisOrder[i];
-            if (_axis >= 2 && _stepSel >= 5)  // no JOG on AZ, ALT and Focus
-                _stepSel = 4;
             break;
         }
         case Screen::SetHomeConfirm:
@@ -336,7 +336,7 @@ void UiController::clickScreen(uint32_t nowMs)
                 break;
             }
             clickTick();
-            push(UiAction::Kind::SetHome);
+            push(_homeAll ? UiAction::Kind::SetHomeAll : UiAction::Kind::SetHome);
             showTransient(TextId::HdrHomeSet, kSyncedMs, nowMs);
             _screen = Screen::Status;
             break;
@@ -416,7 +416,7 @@ void UiController::holdScreen()
             _screen = Screen::Settings;
             _sel = 0;
             break;
-        case Screen::Adjust:  // not moving here (moving is STOP): the options
+        case Screen::Adjust:  // not moving here (moving is STOP): the options (their long press returns here)
             _sel = 0;
             _screen = Screen::AdjustOptions;
             break;
@@ -428,6 +428,8 @@ void UiController::holdScreen()
             _sel = kNetworkRow;
             break;
         case Screen::AdjustOptions:
+            _screen = Screen::Adjust;
+            break;
         case Screen::Settings:
         case Screen::PointConfirm:
         case Screen::Refused:
@@ -473,7 +475,7 @@ void UiController::turnScreen(int8_t detents, uint32_t nowMs)
 
 TextId UiController::row0Label() const
 {
-    if (mountMoving() || _jogDir != 0)  // not the step latch: it would flip the row and arm the M2 click ignore
+    if (mountMoving())  // not the step latch: it would flip the row and arm the M2 click ignore
         return TextId::Stop;
     return _m.state == MountState::Tracking ? TextId::StopTracking : TextId::TrackHere;
 }
@@ -598,8 +600,6 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
         !moving() && !_motionPushed)
         push(UiAction::Kind::SetSupplyVoltage, m.supplyAuto);
 
-    if (_jogDir && !within(nowMs, _jogMs, kJogStopMs))  // M4: stop 300 ms after the last detent
-        jogStop();
     if (_stepLatch && (mountMoving() || !within(nowMs, _stepMs, kStepLatchMs)))  // the snapshot caught up, or the move was too short to show
         _stepLatch = false;
 
@@ -625,7 +625,6 @@ bool UiController::tick(uint32_t nowMs, const MountSnapshot &m)
     {
         _faultPage = true;
         _saver = false;
-        _jogDir = 0;  // the Stop below ends it
         push(UiAction::Kind::Stop);
         push(UiAction::Kind::BeepLong);
     }
@@ -715,7 +714,7 @@ void UiController::renderScreen(Canvas &c) const
             renderAdjust(c);
             break;
         case Screen::SetHomeConfirm:
-            renderSmallConfirm(c, TextId::HdrHome, TextId::SetHomeQ);
+            renderSmallConfirm(c, TextId::HdrHome, _homeAll ? TextId::SetHomeAllQ : TextId::SetHomeQ);
             break;
         case Screen::Network:
             renderNetwork(c);

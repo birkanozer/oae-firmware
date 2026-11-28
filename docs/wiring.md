@@ -92,7 +92,7 @@ hold 30 % (`ALT_MOTOR_HOLD_SETTING`), released when idle (`ALT_ALWAYS_ON 0`), co
 `ALT_COIL_RESISTANCE_OHM` (default 50 ohm). EN stays high until the UART current is set. If the ALT
 UART does not answer at boot, every ALT move is refused (no motion, no position change).
 `UART_CONNECTION_TEST_TXRX 1` is mandatory (`#error` otherwise). 2048 steps per turn, 16 microsteps,
-400 full steps/s and 200 full steps/s^2; steps per degree from upstream's OAE ALT formula (130 mm
+200 full steps/s and 100 full steps/s^2; steps per degree from upstream's OAE ALT formula (130 mm
 radius, 1.25 mm rod pitch). Same quiet TMC settings as AZ.
 
 ## AZ motor: bipolar-modded 28BYJ-48 on the Z socket (TMC2209, UART)
