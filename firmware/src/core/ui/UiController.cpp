@@ -893,9 +893,9 @@ void UiController::renderSaver(Canvas &c) const
 {
     char l[48];
     if (_m.timeSet)
-        snprintf(l, sizeof l, "%02d:%02d", (int)(_m.localSeconds / 3600), (int)(_m.localSeconds / 60 % 60));
+        hms(l, sizeof l, _m.localSeconds);
     else
-        strcpy(l, "--:--");
+        strcpy(l, "--:--:--");
     center(c, Font::F10x20, 6, l, false);
     center(c, Font::F6x10, 31, t(stateWord()), false);
     const TextId w = warning();

@@ -286,21 +286,6 @@ TEST(FieldEditorTest, BackOnFirstGroupCancels)
     EXPECT_EQ(0, e.group());
 }
 
-TEST(FieldEditorTest, TimeHMFormatAndSecondsZero)
-{
-    FieldEditor e;
-    e.begin(FieldKind::TimeHM, 23 * 3600 + 41 * 60 + 59);
-    EXPECT_EQ("23:41", fmt(e));
-    EXPECT_EQ(0, e.value() % 60);
-    e.turn(1);
-    EXPECT_EQ("00:41", fmt(e));
-    e.click();
-    e.turn(-42);
-    EXPECT_EQ("00:59", fmt(e));
-    EXPECT_EQ(59 * 60, e.value());
-    EXPECT_TRUE(e.click());
-}
-
 TEST(FieldEditorTest, LatitudeLettersFormat)
 {
     FieldEditor e;

@@ -344,7 +344,7 @@ TEST(UiControllerTest, SaverAfter120sIdleOnly)
     EXPECT_FALSE(u.drew("turn to wake"));
     u.tick(1);
     EXPECT_TRUE(u.drew("turn to wake"));
-    EXPECT_TRUE(u.drew("23:41"));
+    EXPECT_TRUE(u.drew("23:41:07"));
     EXPECT_TRUE(u.drew("TRACKING"));
     EXPECT_EQ(0, u.c.violations);
 
@@ -359,8 +359,10 @@ TEST(UiControllerTest, SaverAfter120sIdleOnly)
     w.m.timeSet = false;
     w.tick();
     w.tick(120000);
-    EXPECT_TRUE(w.drew("--:--"));
+    EXPECT_TRUE(w.drew("turn to wake"));  // the saver, not the status screen
+    EXPECT_TRUE(w.drew("--:--:--"));
     EXPECT_TRUE(w.inv("SET TIME"));
+    EXPECT_EQ(0, w.c.violations);
 
     Ui i;  // input restarts the wait
     i.tick();

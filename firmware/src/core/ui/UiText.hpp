@@ -156,7 +156,6 @@ enum class TextId : uint8_t
     FootEdit,
     FootCheck,
     FootSave,
-    FootAt00,
     RefBelow,
     RefSun,
     RefInvalid,

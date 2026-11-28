@@ -8,7 +8,6 @@ namespace core {
 enum class FieldKind : uint8_t
 {
     Time,
-    TimeHM,
     RA,
     Dec,
     Latitude,
@@ -22,7 +21,7 @@ enum class FieldKind : uint8_t
 class FieldEditor
 {
   public:
-    // Time/RA: seconds 0..86399. TimeHM: same, hh:mm only (seconds dropped, stay 0). Dec: arc-seconds +-324000. Latitude: +-324000, Longitude: +-648000
+    // Time/RA: seconds 0..86399. Dec: arc-seconds +-324000. Latitude: +-324000, Longitude: +-648000
     // (both edited in minutes, seconds dropped). Date: yyyy*10000+mm*100+dd. Int: min..max.
     void begin(FieldKind kind, int32_t value, int32_t min = 0, int32_t max = 0);
     // Changes the selected group, wrapping inside its range; nothing carries into other groups.

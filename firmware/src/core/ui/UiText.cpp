@@ -145,7 +145,6 @@ const Entry kTable[] = {
     {"click: edit", "tikla: duzenle"},
     {"click: check", "tikla: kontrol"},
     {"click: save", "tikla: kaydet"},
-    {"click at :00 sec", "tikla: :00 sn"},
     {"BELOW HORIZON", "UFKUN ALTINDA"},
     {"TOO CLOSE TO SUN", "GUNESE COK YAKIN"},
     {"INVALID INPUT", "GECERSIZ"},

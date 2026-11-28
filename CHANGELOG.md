@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.1] - 2026-11-28
+
+### Changed
+
+- Time editor edits seconds too (hh:mm:ss): set the seconds to match your watch and click to save; the old "click at :00" footer is gone. Untouched seconds keep the value from when the editor opened.
+- Setup's Time row and the screensaver clock show hh:mm:ss.
+
 ## [v0.7.0] - 2026-11-28
 
 ### Added

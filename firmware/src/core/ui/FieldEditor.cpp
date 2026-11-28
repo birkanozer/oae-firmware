@@ -118,7 +118,7 @@ void FieldEditor::begin(FieldKind kind, int32_t value, int32_t min, int32_t max)
     _group = 0;
     _letters[0] = _letters[1] = 0;
     _signed = kind == FieldKind::Dec || kind == FieldKind::Latitude || kind == FieldKind::Longitude || kind == FieldKind::Int;
-    _n = kind == FieldKind::Dec ? 4 : (kind == FieldKind::Int || kind == FieldKind::TimeHM ? 2 : 3);
+    _n = kind == FieldKind::Dec ? 4 : (kind == FieldKind::Int ? 2 : 3);
     switch (kind)
     {
         case FieldKind::Dec:
@@ -214,9 +214,6 @@ void FieldEditor::format(char *out, size_t len) const
             break;
         case FieldKind::Int:
             snprintf(out, len, "%c%d", sg, (int)_g[1]);
-            break;
-        case FieldKind::TimeHM:
-            snprintf(out, len, "%02d:%02d", (int)_g[0], (int)_g[1]);
             break;
         default:
             snprintf(out, len, "%02d:%02d:%02d", (int)_g[0], (int)_g[1], (int)_g[2]);

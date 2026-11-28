@@ -568,17 +568,19 @@ TEST(UiFlowsTest, FastPathDateThenTime)
     u.click();
     EXPECT_TRUE(u.drew("SETUP TIME"));
     EXPECT_TRUE(u.inv("23"));
-    EXPECT_TRUE(u.drew(":41"));
+    EXPECT_TRUE(u.drew(":41:07"));
     EXPECT_FALSE(Ui::has(u.actions(), Kind::SetDate));  // applied together at the end
-    u.click();
-    EXPECT_TRUE(u.drew("click at :00 sec"));
+    clicks(u, 2);
+    EXPECT_TRUE(u.drew("seconds"));
+    EXPECT_TRUE(u.drew("click: save"));
+    u.turn(1);
     u.click();
     const auto a = u.acts();
     UiAction d{}, t{};
     ASSERT_TRUE(Ui::find(a, Kind::SetDate, d));
     ASSERT_TRUE(Ui::find(a, Kind::SetTime, t));
     EXPECT_EQ(20261112, d.a);
-    EXPECT_EQ(23 * 3600 + 41 * 60, t.a);
+    EXPECT_EQ(23 * 3600 + 41 * 60 + 8, t.a);
     EXPECT_TRUE(u.drew("click: menu") || u.drew("SET DATE & TIME"));  // status
     EXPECT_FALSE(u.drew("SETUP TIME"));
 
@@ -593,7 +595,7 @@ TEST(UiFlowsTest, FastPathDateThenTime)
     EXPECT_EQ(0, u.c.violations);
 }
 
-TEST(UiFlowsTest, TimeSecondsZeroAtClick)
+TEST(UiFlowsTest, TimeSecondsEdited)
 {
     Ui u;
     u.m.localSeconds = 10 * 3600 + 5 * 60 + 59;
@@ -605,11 +607,17 @@ TEST(UiFlowsTest, TimeSecondsZeroAtClick)
     EXPECT_TRUE(u.drew("SETUP TIME"));
     u.click();
     u.turn(1);
+    u.click();  // seconds: the third group
+    EXPECT_TRUE(u.drew("seconds"));
+    EXPECT_TRUE(u.drew("3/3"));
+    EXPECT_TRUE(u.drew("SETUP TIME"));
+    u.actions();
+    u.turn(-4);
     u.click();
     bool f;
     const UiAction a = get(u, Kind::SetTime, f);
     ASSERT_TRUE(f);
-    EXPECT_EQ(10 * 3600 + 6 * 60, a.a);  // hh:mm, seconds 00
+    EXPECT_EQ(10 * 3600 + 6 * 60 + 55, a.a);  // the edited seconds reach SetTime
     EXPECT_TRUE(u.drew("SETUP"));  // back on the list
 }
 
@@ -624,7 +632,7 @@ TEST(UiFlowsTest, DatePrefilledFromLastSaved)
     EXPECT_TRUE(u.drew("SETUP DATE"));
     EXPECT_TRUE(u.inv("2025"));
     EXPECT_TRUE(u.drew("-01-02"));
-    clicks(u, 5);  // date, then time
+    clicks(u, 6);  // date, then time
     bool f;
     const UiAction a = get(u, Kind::SetDate, f);
     ASSERT_TRUE(f);
@@ -647,7 +655,7 @@ TEST(UiFlowsTest, ClearsSyncConfirmBeforeTimeChange)
     setup(u);
     u.turn(1);
     u.click();  // Time
-    clicks(u, 2);
+    clicks(u, 3);
     EXPECT_TRUE(u.drew("Clears Sync. Sure?"));
     EXPECT_TRUE(u.inv("click = yes"));
     EXPECT_FALSE(Ui::has(u.actions(), Kind::SetTime));
@@ -655,7 +663,7 @@ TEST(UiFlowsTest, ClearsSyncConfirmBeforeTimeChange)
     EXPECT_TRUE(u.drew("SETUP"));
     EXPECT_FALSE(Ui::has(u.actions(), Kind::SetTime));
     u.click();  // Time again
-    clicks(u, 2);
+    clicks(u, 3);
     u.click();  // yes
     EXPECT_TRUE(Ui::has(u.actions(), Kind::SetTime));
 
@@ -688,7 +696,7 @@ TEST(UiFlowsTest, ClearsSyncConfirmBeforeTimeChange)
     f.m.timeSet = false;
     f.tick();
     f.click();
-    clicks(f, 5);
+    clicks(f, 6);
     EXPECT_TRUE(f.drew("Clears Sync. Sure?"));
     auto a = f.actions();
     EXPECT_FALSE(Ui::has(a, Kind::SetDate));
@@ -709,7 +717,7 @@ TEST(UiFlowsTest, AbandonedSureNeverRidesAlong)
     setup(u);
     u.turn(1);
     u.click();  // Time
-    clicks(u, 2);
+    clicks(u, 3);
     EXPECT_TRUE(u.drew("Clears Sync. Sure?"));
     u.state(MountState::Slewing);
     u.click();  // STOP
@@ -724,6 +732,20 @@ TEST(UiFlowsTest, AbandonedSureNeverRidesAlong)
     const auto a = u.actions();
     EXPECT_TRUE(Ui::has(a, Kind::SetLatitude));
     EXPECT_FALSE(Ui::has(a, Kind::SetTime));
+}
+
+TEST(UiFlowsTest, SetupTimeRowShowsSeconds)
+{
+    Ui u;
+    u.tick();
+    setup(u);
+    EXPECT_TRUE(u.drew(row("Time", "23:41:07").c_str()));
+    Ui v;
+    v.tick();
+    setup(v);
+    v.m.timeSet = false;
+    v.tick(10);
+    EXPECT_TRUE(v.drew(row("Time", "--:--:--").c_str()));
 }
 
 TEST(UiFlowsTest, LatLonUseHemisphereLetters)

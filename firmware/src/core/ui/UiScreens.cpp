@@ -52,8 +52,8 @@ void UiController::openEditor(Edit e, int32_t value, bool lastGroup)
         case Edit::Date:
             _editor.begin(FieldKind::Date, value);
             break;
-        case Edit::Time:  // S1c: hh:mm, seconds 00 at the click
-            _editor.begin(FieldKind::TimeHM, value);
+        case Edit::Time:
+            _editor.begin(FieldKind::Time, value);
             break;
         case Edit::Utc:
             _editor.begin(FieldKind::Int, value, -12, 14);
@@ -248,9 +248,9 @@ uint8_t UiController::items(Item *out) const
                 strcpy(v, "----------");
             add(t(TextId::Date), v, false);
             if (_m.timeSet)
-                formatEdit(v, sizeof v, FieldKind::TimeHM, _m.localSeconds);
+                formatEdit(v, sizeof v, FieldKind::Time, _m.localSeconds);
             else
-                strcpy(v, "--:--");
+                strcpy(v, "--:--:--");
             add(t(TextId::Time), v, false);
             formatEdit(v, sizeof v, FieldKind::Int, _m.utcOffsetHours);
             add(t(TextId::UtcOffset), v, false);
@@ -519,7 +519,7 @@ void UiController::renderEdit(Canvas &c) const
                 last = TextId::FootNextBack;
             break;
         case Edit::Time:
-            title = TextId::HdrSetupTime, n = 2, last = TextId::FootAt00;
+            title = TextId::HdrSetupTime;
             break;
         case Edit::Utc:
             title = TextId::HdrSetupUtc, sub = kUtc, n = 2;
